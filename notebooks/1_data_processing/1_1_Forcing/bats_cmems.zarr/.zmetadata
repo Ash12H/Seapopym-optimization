@@ -1,0 +1,599 @@
+{
+    "metadata": {
+        ".zattrs": {
+            "Conventions": "CF-1.11",
+            "history": "Created on 2022-09-28",
+            "institution": "CLS",
+            "references": "http://www.cls.fr; http://www.seapodym.eu",
+            "source": "SEAPODYM-LMTL 3.0.0",
+            "subset:datasetId": "cmems_mod_glo_bgc_my_0.083deg-lmtl_PT1D-i_202211",
+            "subset:date": "2024-06-12T03:45:47.386Z",
+            "subset:productId": "GLOBAL_MULTIYEAR_BGC_001_033",
+            "subset:source": "ARCO data downloaded from the Marine Data Store using the MyOcean Data Portal",
+            "title": "Global ocean low and mid trophic levels biomass content hindcast"
+        },
+        ".zgroup": {
+            "zarr_format": 2
+        },
+        "T/.zarray": {
+            "chunks": [
+                9116,
+                3,
+                1,
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f4",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                9116,
+                3,
+                1,
+                1
+            ],
+            "zarr_format": 2
+        },
+        "T/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time",
+                "depth",
+                "latitude",
+                "longitude"
+            ],
+            "long_name": "Sea water potential temperature vertical mean over pelagic layer",
+            "standard_name": "sea_water_potential_temperature_vertical_mean_over_pelagic_layer",
+            "units": "Celsius degree"
+        },
+        "U/.zarray": {
+            "chunks": [
+                9116,
+                3,
+                1,
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f4",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                9116,
+                3,
+                1,
+                1
+            ],
+            "zarr_format": 2
+        },
+        "U/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time",
+                "depth",
+                "latitude",
+                "longitude"
+            ],
+            "long_name": "Eastward sea water velocity vertical mean over pelagic layer",
+            "standard_name": "eastward_sea_water_velocity_vertical_mean_over_pelagic_layer",
+            "units": "m/s"
+        },
+        "V/.zarray": {
+            "chunks": [
+                9116,
+                3,
+                1,
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f4",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                9116,
+                3,
+                1,
+                1
+            ],
+            "zarr_format": 2
+        },
+        "V/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time",
+                "depth",
+                "latitude",
+                "longitude"
+            ],
+            "long_name": "Northward sea water velocity vertical mean over pelagic layer",
+            "standard_name": "northward_sea_water_velocity_vertical_mean_over_pelagic_layer",
+            "units": "m/s"
+        },
+        "depth/.zarray": {
+            "chunks": [
+                3
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f4",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                3
+            ],
+            "zarr_format": 2
+        },
+        "depth/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "depth"
+            ],
+            "axis": "Z",
+            "long_name": "Depth",
+            "positive": "down",
+            "standard_name": "depth",
+            "unit_long": "Meters",
+            "units": "m",
+            "valid_max": 3.0,
+            "valid_min": 1.0
+        },
+        "latitude/.zarray": {
+            "chunks": [
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f8",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                1
+            ],
+            "zarr_format": 2
+        },
+        "latitude/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "latitude"
+            ],
+            "axis": "Y",
+            "long_name": "Latitude",
+            "standard_name": "latitude",
+            "unit_long": "Degrees North",
+            "units": "degrees_north",
+            "valid_max": 89.91666412353516,
+            "valid_min": -80.0
+        },
+        "longitude/.zarray": {
+            "chunks": [
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f8",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                1
+            ],
+            "zarr_format": 2
+        },
+        "longitude/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "longitude"
+            ],
+            "axis": "X",
+            "long_name": "Longitude",
+            "standard_name": "longitude",
+            "unit_long": "Degrees East",
+            "units": "degrees_east"
+        },
+        "mnkc_epi/.zarray": {
+            "chunks": [
+                9116,
+                1,
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f4",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                9116,
+                1,
+                1
+            ],
+            "zarr_format": 2
+        },
+        "mnkc_epi/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time",
+                "latitude",
+                "longitude"
+            ],
+            "long_name": "Mass content of epipelagic micronekton expressed as wet weight in sea water",
+            "standard_name": "mass_content_of_epipelagic_micronekton_expressed_as_wet_weight_in_sea_water",
+            "units": "g m-2"
+        },
+        "mnkc_hmlmeso/.zarray": {
+            "chunks": [
+                9116,
+                1,
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f4",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                9116,
+                1,
+                1
+            ],
+            "zarr_format": 2
+        },
+        "mnkc_hmlmeso/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time",
+                "latitude",
+                "longitude"
+            ],
+            "long_name": "Mass content of highly migrant lower mesopelagic micronekton expressed as wet weight in sea water",
+            "standard_name": "mass_content_of_highly_migrant_lower_mesopelagic_micronekton_expressed_as_wet_weight_in_sea_water",
+            "units": "g m-2"
+        },
+        "mnkc_lmeso/.zarray": {
+            "chunks": [
+                9116,
+                1,
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f4",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                9116,
+                1,
+                1
+            ],
+            "zarr_format": 2
+        },
+        "mnkc_lmeso/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time",
+                "latitude",
+                "longitude"
+            ],
+            "long_name": "Mass content of lower mesopelagic micronekton expressed as wet weight in sea water",
+            "standard_name": "mass_content_of_lower_mesopelagic_micronekton_expressed_as_wet_weight_in_sea_water",
+            "units": "g m-2"
+        },
+        "mnkc_mlmeso/.zarray": {
+            "chunks": [
+                9116,
+                1,
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f4",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                9116,
+                1,
+                1
+            ],
+            "zarr_format": 2
+        },
+        "mnkc_mlmeso/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time",
+                "latitude",
+                "longitude"
+            ],
+            "long_name": "Mass content of migrant lower mesopelagic micronekton expressed as wet weight in sea water",
+            "standard_name": "mass_content_of_migrant_lower_mesopelagic_micronekton_expressed_as_wet_weight_in_sea_water",
+            "units": "g m-2"
+        },
+        "mnkc_mumeso/.zarray": {
+            "chunks": [
+                9116,
+                1,
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f4",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                9116,
+                1,
+                1
+            ],
+            "zarr_format": 2
+        },
+        "mnkc_mumeso/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time",
+                "latitude",
+                "longitude"
+            ],
+            "long_name": "Mass content of migrant upper mesopelagic micronekton expressed as wet weight in sea water",
+            "standard_name": "mass_content_of_migrant_upper_mesopelagic_micronekton_expressed_as_wet_weight_in_sea_water",
+            "units": "g m-2"
+        },
+        "mnkc_umeso/.zarray": {
+            "chunks": [
+                9116,
+                1,
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f4",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                9116,
+                1,
+                1
+            ],
+            "zarr_format": 2
+        },
+        "mnkc_umeso/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time",
+                "latitude",
+                "longitude"
+            ],
+            "long_name": "Mass content of upper mesopelagic micronekton expressed as wet weight in sea water",
+            "standard_name": "mass_content_of_upper_mesopelagic_micronekton_expressed_as_wet_weight_in_sea_water",
+            "units": "g m-2"
+        },
+        "npp/.zarray": {
+            "chunks": [
+                9116,
+                1,
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f4",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                9116,
+                1,
+                1
+            ],
+            "zarr_format": 2
+        },
+        "npp/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time",
+                "latitude",
+                "longitude"
+            ],
+            "long_name": "Net primary productivity of biomass expressed as carbon in sea water",
+            "standard_name": "net_primary_productivity_of_biomass_expressed_as_carbon_in_sea_water",
+            "units": "mg m-2 day-1"
+        },
+        "pelagic_layer_depth/.zarray": {
+            "chunks": [
+                9116,
+                3,
+                1,
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f4",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                9116,
+                3,
+                1,
+                1
+            ],
+            "zarr_format": 2
+        },
+        "pelagic_layer_depth/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time",
+                "depth",
+                "latitude",
+                "longitude"
+            ],
+            "long_name": "Sea water pelagic layer bottom depth",
+            "standard_name": "sea_water_pelagic_layer_bottom_depth",
+            "units": "m"
+        },
+        "time/.zarray": {
+            "chunks": [
+                9116
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f8",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                9116
+            ],
+            "zarr_format": 2
+        },
+        "time/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time"
+            ],
+            "axis": "T",
+            "calendar": "gregorian",
+            "long_name": "Time",
+            "standard_name": "time",
+            "units": "seconds since 1970-01-01"
+        },
+        "zeu/.zarray": {
+            "chunks": [
+                9116,
+                1,
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f4",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                9116,
+                1,
+                1
+            ],
+            "zarr_format": 2
+        },
+        "zeu/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time",
+                "latitude",
+                "longitude"
+            ],
+            "long_name": "Euphotic zone depth",
+            "standard_name": "euphotic_zone_depth",
+            "units": "m"
+        },
+        "zooc/.zarray": {
+            "chunks": [
+                9116,
+                1,
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f4",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                9116,
+                1,
+                1
+            ],
+            "zarr_format": 2
+        },
+        "zooc/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time",
+                "latitude",
+                "longitude"
+            ],
+            "long_name": "Mass content of zooplankton expressed as carbon in sea water",
+            "standard_name": "mass_content_of_zooplankton_expressed_as_carbon_in_sea_water",
+            "units": "g m-2"
+        }
+    },
+    "zarr_consolidated_format": 1
+}
