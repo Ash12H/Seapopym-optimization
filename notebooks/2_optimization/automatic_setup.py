@@ -6,6 +6,7 @@ from seapopym.configuration.no_transport.parameter import (
     FunctionalGroups,
     KernelParameters,
     NoTransportParameters,
+    EnvironmentParameter,
 )
 from seapopym.configuration.parameters.parameter_functional_group import (
     FunctionalGroupUnit,
@@ -24,7 +25,13 @@ def _zoo_model_factory(
     inv_lambda_max: float = 150,
     inv_lambda_rate: float = 0.15,
     energy_transfert: float = 0.1668,
-):
+    kernel: KernelParameters | None = None,
+    environment: EnvironmentParameter | None = None,
+) -> NoTransportModel:
+    if kernel is None:
+        kernel = KernelParameters(compute_initial_conditions=True)
+    if environment is None:
+        environment = EnvironmentParameter()
     f_groups = FunctionalGroups(
         functional_groups=[
             FunctionalGroupUnit(
@@ -47,7 +54,8 @@ def _zoo_model_factory(
     parameters = NoTransportParameters(
         functional_groups_parameters=f_groups,
         forcing_parameters=forcing_parameter,
-        kernel_parameters=KernelParameters(compute_initial_conditions=True),
+        kernel_parameters=kernel,
+        environment_parameters=environment,
     )
     return NoTransportModel(configuration=NoTransportConfiguration(parameters))
 
@@ -58,6 +66,8 @@ def wrapper_zoo_model(
     inv_lambda_max: int,
     inv_lambda_rate: int,
     forcing_parameter: ForcingParameters,
+    kernel: KernelParameters | None = None,
+    environment: EnvironmentParameter | None = None,
 ) -> NoTransportModel:
     param = _zoo_model_factory(
         forcing_parameter=forcing_parameter,
@@ -65,6 +75,10 @@ def wrapper_zoo_model(
         tr_rate=tr_rate,
         inv_lambda_max=inv_lambda_max,
         inv_lambda_rate=inv_lambda_rate,
+        kernel=kernel,
+        environment=environment,
     )
+    if environment is None:
+        param.initialize_dask()
     param.run()
     return param
