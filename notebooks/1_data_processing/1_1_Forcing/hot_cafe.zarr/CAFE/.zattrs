@@ -1,0 +1,19 @@
+{
+    "_ARRAY_DIMENSIONS": [
+        "time",
+        "lat",
+        "lon"
+    ],
+    "adg wavelength": "443nm",
+    "aph wavelength": "443nm",
+    "bbp wavelength": "443nm",
+    "doi": "10.1002/2016GB005521",
+    "long_name": "primary_production_using_CAFE_model",
+    "mld_criteria": "0.030 kg m^-3",
+    "mld_product": "HADLEY",
+    "reference": "Silsbe_et_al_2016",
+    "remote_sensing_data_product": "OCCCIv6",
+    "resolution": "0.00f; // float",
+    "standard_name": "NPP",
+    "units": "mg m-2 day-1"
+}

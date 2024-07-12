@@ -1,0 +1,138 @@
+{
+    "metadata": {
+        ".zattrs": {
+            "Conventions": "CF-1.8",
+            "History": "2023-01-02 08:55:09.514113 Python",
+            "Keywords": "Primary Production",
+            "PI Contact": "tryankeogh@csir.co.za",
+            "PI Name": "Thomas Ryan-Keogh"
+        },
+        ".zgroup": {
+            "zarr_format": 2
+        },
+        "CAFE/.zarray": {
+            "chunks": [
+                1150,
+                1,
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f8",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                1150,
+                1,
+                1
+            ],
+            "zarr_format": 2
+        },
+        "CAFE/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time",
+                "lat",
+                "lon"
+            ],
+            "adg wavelength": "443nm",
+            "aph wavelength": "443nm",
+            "bbp wavelength": "443nm",
+            "doi": "10.1002/2016GB005521",
+            "long_name": "primary_production_using_CAFE_model",
+            "mld_criteria": "0.030 kg m^-3",
+            "mld_product": "HADLEY",
+            "reference": "Silsbe_et_al_2016",
+            "remote_sensing_data_product": "OCCCIv6",
+            "resolution": "0.00f; // float",
+            "standard_name": "NPP",
+            "units": "mg m-2 day-1"
+        },
+        "lat/.zarray": {
+            "chunks": [
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f8",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                1
+            ],
+            "zarr_format": 2
+        },
+        "lat/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "lat"
+            ]
+        },
+        "lon/.zarray": {
+            "chunks": [
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<i8",
+            "fill_value": null,
+            "filters": null,
+            "order": "C",
+            "shape": [
+                1
+            ],
+            "zarr_format": 2
+        },
+        "lon/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "lon"
+            ]
+        },
+        "time/.zarray": {
+            "chunks": [
+                1150
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<i8",
+            "fill_value": null,
+            "filters": null,
+            "order": "C",
+            "shape": [
+                1150
+            ],
+            "zarr_format": 2
+        },
+        "time/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time"
+            ],
+            "calendar": "proleptic_gregorian",
+            "format": "datetime64[ns]",
+            "long_name": "time",
+            "standard_name": "Time",
+            "units": "days since 1998-01-01"
+        }
+    },
+    "zarr_consolidated_format": 1
+}
