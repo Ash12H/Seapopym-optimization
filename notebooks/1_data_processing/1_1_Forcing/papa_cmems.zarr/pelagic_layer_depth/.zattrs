@@ -1,0 +1,12 @@
+{
+    "_ARRAY_DIMENSIONS": [
+        "time",
+        "depth",
+        "latitude",
+        "longitude"
+    ],
+    "add_offset": 507.3274823372811,
+    "scale_factor": 0.015035630898853082,
+    "standard_name": "sea_water_pelagic_layer_bottom_depth",
+    "units": "m"
+}
