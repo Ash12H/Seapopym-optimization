@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
+from functools import partial
+
 import numpy as np
 from seapopym.configuration.no_transport.configuration import NoTransportConfiguration
 from seapopym.configuration.no_transport.parameter import ForcingParameters, NoTransportParameters
@@ -18,19 +21,24 @@ def cost_function(
     groups_name: list[str] | None = None,
     **kwargs: dict,
 ) -> tuple[float]:
-    """Use the Mean Absolute Error (MAE) method or the Mean Squared Error (MSE) method to calculate the cost."""
-    total_size = np.flatten(args).size
-    func_groups_nb = total_size // nb_parameters
-    func_group_matrix = args.reshape(func_groups_nb, nb_parameters)
+    """
+    Use the Mean Absolute Error (MAE) method or the Mean Squared Error (MSE) method to calculate the cost.
+
+    Parameters
+    ----------
+    args : np.ndarray
+        Parameters to optimize.
+
+    """
+    args_flat = np.asarray(args).flatten()
+    func_group_matrix = args_flat.reshape(args_flat.size // nb_parameters, nb_parameters)
 
     fg_parameters = FunctionalGroupGeneratorNoTransport(func_group_matrix, groups_name)
 
     model = NoTransportModel(
         configuration=NoTransportConfiguration(
             parameters=NoTransportParameters(
-                forcing_parameters=forcing_parameters,
-                functional_groups_parameters=fg_parameters.generate(),
-                **kwargs,
+                forcing_parameters=forcing_parameters, functional_groups_parameters=fg_parameters.generate(), **kwargs
             )
         )
     )
@@ -62,3 +70,46 @@ def cost_function(
     # cost = float(((zoo_obs - biomass_pred) ** 2).mean())
 
     # return (cost,)
+
+    return predicted_biomass
+
+
+class GenericCostFunction(ABC):
+    """Generic cost function class."""
+
+    def __init__(self, nb_parameters: int, forcing_parameters: ForcingParameters, observations: ...) -> None:
+        """
+        ...
+
+        Parameters
+        ----------
+        nb_parameters : int
+            Number of parameters by functional group in the simulation.
+        forcing_parameters : ForcingParameters
+            Forcing parameters.
+        observations : ...
+            Observations.
+
+        """
+        self.nb_parameters = nb_parameters
+        self.forcing_parameters = forcing_parameters
+        self.observations = observations
+
+    @abstractmethod
+    def _cost_function(
+        args: np.ndarray, nb_parameters: int, forcing_parameters: ForcingParameters, observations: ...
+    ) -> tuple[float]:
+        pass
+
+        def generate(self) -> tuple[float]:
+            return partial(
+                self._cost_function,
+                nb_parameters=self.nb_parameters,
+                forcing_parameters=self.forcing_parameters,
+                observations=self.observations,
+            )
+
+
+# TODO : We should be able to fix some parameters easily
+# Utiliser une matrice 2D avec des NONE pour les paramètres à opti et des valeurs pour les paramètres fixé.
+# ensuite on rempli la matrice avec les valeurs de args en déroulant la matrice.
