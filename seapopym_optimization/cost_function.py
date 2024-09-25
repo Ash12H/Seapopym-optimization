@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from functools import partial
 from typing import Callable, Iterable
 
 import numpy as np
@@ -75,6 +76,31 @@ def cost_function(
     return predicted_biomass
 
 
+def fill_args(args: np.ndarray, fixed_parameters: np.ndarray) -> np.ndarray:
+    """
+    Fill the fixed parameters in the args. Used to get all the parameters needed for the simulation.
+
+    Parameters
+    ----------
+    args : np.ndarray
+        Parameters to optimize. This array must be flattened.
+    fixed_parameters : np.ndarray
+        Fixed parameters. This array must have the shape (nb_functional_groups, nb_parameters).
+
+    Returns
+    -------
+    np.ndarray
+        An array that contains all the parameters needed for the simulation. The shape is the same as the
+        fixed_parameters array.
+
+    """
+    initial_shape = fixed_parameters.shape
+    args = np.asarray(args, dtype=float)
+    args_flat = fixed_parameters.flatten()
+    args_flat[np.isnan(args_flat)] = args
+    return args_flat.reshape(initial_shape)
+
+
 @dataclass
 class GenericCostFunction(ABC):
     """
@@ -97,7 +123,7 @@ class GenericCostFunction(ABC):
     -----
     This class is used to create a generic cost function that can be used to optimize the parameters of the SeapoPym
     model. The cost function must be rewritten in the child class following the steps below:
-    # - Create a structure (i.e. np.ndarray) to store the parameters of each functional group.
+    #TODO(Jules): Add the steps to follow to create a new cost function.
 
     """
 
@@ -118,29 +144,95 @@ class GenericCostFunction(ABC):
             msg = f"Fixed parameters must have the shape ({self.nb_functional_groups}, {self.nb_parameters})"
             raise ValueError(msg)
 
-    def fill_args(self: GenericCostFunction, args: np.ndarray) -> np.ndarray:
-        """Fill the fixed parameters in the args. Used to get all the parameters needed for the simulation."""
-        args = np.asarray(args, dtype=float)
-        args_flat = self.fixed_parameters.flatten()
-        args_flat[np.isnan(args_flat)] = args
-        return args_flat
-
     @abstractmethod
+    def _cost_function(
+        self: GenericCostFunction,
+        args: np.ndarray,
+        fixed_parameters: np.ndarray,
+        forcing_parameters: ForcingParameters,
+        observations: ...,
+    ) -> tuple:
+        """
+        Calculate the cost of the simulation.
+
+        This function must be rewritten in the child class.
+        """
+
     def generate(self: GenericCostFunction) -> Callable[[Iterable[float]], tuple]:
-        """
-        Generate the partial cost function used for optimization.
-
-        This function must be rewritten in the child class. Example of implementation:
-
-            ```python
-            def generate(self: GenericCostFunction) -> Callable[[Iterable[float]], tuple]:
-                def cost_function(args: Iterable[float]) -> tuple:  # noqa: ARG001
-                    [...some code...]
-                    return (cost,)
-                return cost_function
-        """
+        """Generate the partial cost function used for optimization."""
+        return partial(
+            self._cost_function,
+            fixed_parameters=self.fixed_parameters,
+            forcing_parameters=self.forcing_parameters,
+            observations=self.observations,
+        )
 
 
-# TODO : We should be able to fix some parameters easily
-# Utiliser une matrice 2D avec des NONE pour les paramètres à opti et des valeurs pour les paramètres fixé.
-# ensuite on rempli la matrice avec les valeurs de args en déroulant la matrice.
+@dataclass
+class NoTransportCostFunction(GenericCostFunction):
+    """
+    Generator of the cost function for the 'SeapoPym No Transport' model.
+
+    Attributes
+    ----------
+    nb_parameters : int
+        Number of parameters by functional group in the simulation.
+    nb_functional_groups : int
+        Number of functional groups in the simulation.
+    groups_name : list[str]
+        List of the functional groups name.
+    forcing_parameters : ForcingParameters
+        Forcing parameters.
+    observations : ...
+        Observations.
+    fixed_parameters : np.ndarray
+        Fixed parameters. The parameters order is : tr_max, tr_rate, inv_lambda_max, inv_lambda_rate, day_layer,
+        night_layer, energy_transfert.
+
+    """
+
+    groups_name: list[str] = None
+
+    def __post_init__(self: NoTransportCostFunction) -> None:
+        """Check validity of the class."""
+        super().__post_init__()
+
+        if self.groups_name is None:
+            self.groups_name = [f"FG_{i}" for i in range(self.nb_functional_groups)]
+
+    def _cost_function(
+        self: NoTransportCostFunction,
+        args: np.ndarray,
+        fixed_parameters: np.ndarray,
+        forcing_parameters: ForcingParameters,
+        observations: ...,
+        groups_name: list[str],
+        **kwargs: dict,
+    ) -> tuple:
+        args = fill_args(args, fixed_parameters)
+        fg_parameters = FunctionalGroupGeneratorNoTransport(args, groups_name)
+
+        model = NoTransportModel(
+            configuration=NoTransportConfiguration(
+                parameters=NoTransportParameters(
+                    forcing_parameters=forcing_parameters,
+                    functional_groups_parameters=fg_parameters.generate(),
+                    **kwargs,
+                )
+            )
+        )
+
+        model.run()
+
+        predicted_biomass = model.export_biomass()
+        return (predicted_biomass,)
+
+    def generate(self: NoTransportCostFunction) -> Callable[[Iterable[float]], tuple]:
+        """Generate the partial cost function used for optimization."""
+        return partial(
+            self._cost_function,
+            fixed_parameters=self.fixed_parameters,
+            forcing_parameters=self.forcing_parameters,
+            observations=self.observations,
+            groups_name=self.groups_name,
+        )
