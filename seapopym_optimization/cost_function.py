@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from functools import partial
+from dataclasses import dataclass
+from typing import Callable, Iterable
 
 import numpy as np
 from seapopym.configuration.no_transport.configuration import NoTransportConfiguration
@@ -74,40 +75,70 @@ def cost_function(
     return predicted_biomass
 
 
+@dataclass
 class GenericCostFunction(ABC):
-    """Generic cost function class."""
+    """
+    Generic cost function class.
 
-    def __init__(self, nb_parameters: int, forcing_parameters: ForcingParameters, observations: ...) -> None:
-        """
-        ...
+    Parameters
+    ----------
+    nb_parameters : int
+        Number of parameters by functional group in the simulation.
+    nb_functional_groups : int
+        Number of functional groups in the simulation.
+    forcing_parameters : ForcingParameters
+        Forcing parameters.
+    observations : ...
+        Observations.
+    fixed_parameters : np.ndarray
+        Fixed parameters.
 
-        Parameters
-        ----------
-        nb_parameters : int
-            Number of parameters by functional group in the simulation.
-        forcing_parameters : ForcingParameters
-            Forcing parameters.
-        observations : ...
-            Observations.
+    Notes
+    -----
+    This class is used to create a generic cost function that can be used to optimize the parameters of the SeapoPym
+    model. The cost function must be rewritten in the child class following the steps below:
+    # - Create a structure (i.e. np.ndarray) to store the parameters of each functional group.
 
-        """
-        self.nb_parameters = nb_parameters
-        self.forcing_parameters = forcing_parameters
-        self.observations = observations
+    """
+
+    nb_parameters: int
+    nb_functional_groups: int
+    forcing_parameters: ForcingParameters
+    observations: ...
+    fixed_parameters: np.ndarray | None = None
+
+    def __post_init__(self: GenericCostFunction) -> None:
+        """Check validity of the class."""
+        if self.fixed_parameters is None:
+            self.fixed_parameters = np.full((self.nb_functional_groups, self.nb_parameters), np.nan, dtype=float)
+        else:
+            self.fixed_parameters = np.asarray(self.fixed_parameters, dtype=float)
+
+        if self.fixed_parameters.shape != (self.nb_functional_groups, self.nb_parameters):
+            msg = f"Fixed parameters must have the shape ({self.nb_functional_groups}, {self.nb_parameters})"
+            raise ValueError(msg)
+
+    def fill_args(self: GenericCostFunction, args: np.ndarray) -> np.ndarray:
+        """Fill the fixed parameters in the args. Used to get all the parameters needed for the simulation."""
+        args = np.asarray(args, dtype=float)
+        args_flat = self.fixed_parameters.flatten()
+        args_flat[np.isnan(args_flat)] = args
+        return args_flat
 
     @abstractmethod
-    def _cost_function(
-        args: np.ndarray, nb_parameters: int, forcing_parameters: ForcingParameters, observations: ...
-    ) -> tuple[float]:
-        pass
+    def generate(self: GenericCostFunction) -> Callable[[Iterable[float]], tuple]:
+        """
+        Generate the partial cost function used for optimization.
 
-        def generate(self) -> tuple[float]:
-            return partial(
-                self._cost_function,
-                nb_parameters=self.nb_parameters,
-                forcing_parameters=self.forcing_parameters,
-                observations=self.observations,
-            )
+        This function must be rewritten in the child class. Example of implementation:
+
+            ```python
+            def generate(self: GenericCostFunction) -> Callable[[Iterable[float]], tuple]:
+                def cost_function(args: Iterable[float]) -> tuple:  # noqa: ARG001
+                    [...some code...]
+                    return (cost,)
+                return cost_function
+        """
 
 
 # TODO : We should be able to fix some parameters easily
