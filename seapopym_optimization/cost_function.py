@@ -5,75 +5,21 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import partial
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Sequence
 
+import cf_xarray
+import cf_xarray.units
 import numpy as np
+import pint
+import pint_xarray
+import xarray as xr
 from seapopym.configuration.no_transport.configuration import NoTransportConfiguration
 from seapopym.configuration.no_transport.parameter import ForcingParameters, NoTransportParameters
 from seapopym.model.no_transport_model import NoTransportModel
 
 from seapopym_optimization.wrapper import FunctionalGroupGeneratorNoTransport
 
-
-def cost_function(
-    args: np.ndarray,
-    nb_parameters: int,
-    forcing_parameters: ForcingParameters,
-    observations: ...,
-    groups_name: list[str] | None = None,
-    **kwargs: dict,
-) -> tuple[float]:
-    """
-    Use the Mean Absolute Error (MAE) method or the Mean Squared Error (MSE) method to calculate the cost.
-
-    Parameters
-    ----------
-    args : np.ndarray
-        Parameters to optimize.
-
-    """
-    args_flat = np.asarray(args).flatten()
-    func_group_matrix = args_flat.reshape(args_flat.size // nb_parameters, nb_parameters)
-
-    fg_parameters = FunctionalGroupGeneratorNoTransport(func_group_matrix, groups_name)
-
-    model = NoTransportModel(
-        configuration=NoTransportConfiguration(
-            parameters=NoTransportParameters(
-                forcing_parameters=forcing_parameters, functional_groups_parameters=fg_parameters.generate(), **kwargs
-            )
-        )
-    )
-
-    model.run()
-
-    predicted_biomass = model.export_biomass()
-
-    # (
-    #     energy_transfert,
-    #     tr_max,
-    #     tr_rate,
-    #     inv_lambda_max,
-    #     inv_lambda_rate,
-    # ) = args
-    # fgroups = gen_fgroup(
-    #     energy_transfert=energy_transfert,
-    #     tr_max=tr_max,
-    #     tr_rate=tr_rate,
-    #     inv_lambda_max=inv_lambda_max,
-    #     inv_lambda_rate=inv_lambda_rate,
-    # )
-
-    # setup_model = gen_model(hot_data_parameter, fgroups)
-    # setup_model.run()
-
-    # biomass_pred = setup_model.export_biomass().pint.quantify().pint.to("mg / meter ** 2").pint.dequantify()
-    # biomass_pred = biomass_pred[0, :, 0, 0].rename("prediction")
-    # cost = float(((zoo_obs - biomass_pred) ** 2).mean())
-
-    # return (cost,)
-
-    return predicted_biomass
+BIOMASS_UNITS = "kg/m2"
 
 
 def fill_args(args: np.ndarray, fixed_parameters: np.ndarray) -> np.ndarray:
@@ -99,6 +45,88 @@ def fill_args(args: np.ndarray, fixed_parameters: np.ndarray) -> np.ndarray:
     args_flat = fixed_parameters.flatten()
     args_flat[np.isnan(args_flat)] = args
     return args_flat.reshape(initial_shape)
+
+
+@dataclass
+class Observation:
+    """The structure used to store the observation and compute the difference with the predicted data."""
+
+    observation: xr.Dataset
+    """The observations units must be convertible to `BIOMASS_UNITS`."""
+
+    def __post_init__(self: Observation) -> None:
+        """Check that the observation data is complient with the format of the predicted biomass."""
+        for coord in ["T", "X", "Y", "Z"]:
+            if coord not in self.observation.cf.coords:
+                msg = f"Coordinate {coord} must be in the observation Dataset."
+                raise ValueError(msg)
+
+        try:
+            self.observation.pint.quantify().pint.dequantify()
+        except Exception as e:
+            msg = (
+                "You must specify units for each variable and axis for each coordinate. Refer to CF_XARRAY"
+                "documentation for coordinates and PINT for units."
+            )
+            raise ValueError(msg) from e
+
+        try:
+            for variable in self.observation:
+                self.observation[variable] = (
+                    self.observation[variable].pint.quantify().pint.to(BIOMASS_UNITS).pint.dequantify()
+                )
+        except Exception as e:
+            msg = (
+                f"At least one variable is not convertible to {BIOMASS_UNITS}, which is the unit of the predicted ",
+                "biomass.",
+            )
+            raise ValueError(msg) from e
+
+    def aggregate_prediction_by_layer(
+        self: Observation, predicted: xr.DataArray, position: Sequence[int], name: str
+    ) -> xr.DataArray:
+        """
+        The `predicted` DataArray is aggregated by layer depending on the `position` of the functional groups during
+        night/day.
+        """
+        z_coord = self.observation.cf["Z"].name
+        final_aggregated = []
+
+        for layer_position in self.observation.cf["Z"].data:
+            functional_group = predicted["functional_group"].data[(np.asarray(position) == layer_position)]
+            aggregated_predicted = predicted.sel(functional_group=functional_group).sum("functional_group")
+            aggregated_predicted = aggregated_predicted.expand_dims({z_coord: [layer_position]})
+            final_aggregated.append(aggregated_predicted)
+
+        return xr.concat(final_aggregated, dim=z_coord).rename(name)
+
+    def mean_square_error(
+        self: Observation, predicted: xr.Dataset, night_layer: Sequence[int], day_layer: Sequence[int]
+    ) -> None:
+        """Return the mean square error of the predicted and observed biomass."""
+
+        def _mse(pred: xr.DataArray, obs: xr.DataArray) -> float:
+            """Mean square error applied to xr.DataArray."""
+            cost = float(((obs - pred) ** 2).mean())
+            if not np.isfinite(cost):
+                msg = (
+                    "Nan value in cost function. The observation cannot be compared to the prediction. Verify that "
+                    "coordinates are fitting both in space and time."
+                )
+                raise ValueError(msg)
+            return cost
+
+        predicted = predicted.pint.quantify().pint.to(BIOMASS_UNITS).pint.dequantify()
+
+        cost = 0
+        if "day" in self.observation:
+            aggregated_prediction_day = self.aggregate_prediction_by_layer(predicted, day_layer, "day")
+            cost += _mse(pred=aggregated_prediction_day, obs=self.observation["day"])
+        if "night" in self.observation:
+            aggregated_prediction_night = self.aggregate_prediction_by_layer(predicted, night_layer, "night")
+            cost += _mse(pred=aggregated_prediction_night, obs=self.observation["night"])
+
+        return cost
 
 
 @dataclass
@@ -171,7 +199,8 @@ class GenericCostFunction(ABC):
 @dataclass
 class NoTransportCostFunction(GenericCostFunction):
     """
-    Generator of the cost function for the 'SeapoPym No Transport' model.
+    Generator of the cost function for the 'SeapoPym No Transport' model. Consider all stations at once without
+    weights.
 
     Attributes
     ----------
@@ -205,12 +234,16 @@ class NoTransportCostFunction(GenericCostFunction):
         args: np.ndarray,
         fixed_parameters: np.ndarray,
         forcing_parameters: ForcingParameters,
-        observations: ...,
+        observations: Sequence[Observation],
         groups_name: list[str],
         **kwargs: dict,
     ) -> tuple:
         args = fill_args(args, fixed_parameters)
         fg_parameters = FunctionalGroupGeneratorNoTransport(args, groups_name)
+        day_layers = args[:, 4].flatten()
+        print(day_layers)
+        night_layers = args[:, 5].flatten()
+        print(night_layers)
 
         model = NoTransportModel(
             configuration=NoTransportConfiguration(
@@ -224,8 +257,12 @@ class NoTransportCostFunction(GenericCostFunction):
 
         model.run()
 
-        predicted_biomass = model.export_biomass()
-        return (predicted_biomass,)
+        predicted_biomass = model.export_biomass().pint.quantify().pint.to(BIOMASS_UNITS).pint.dequantify()
+        # return tuple(
+        #     obs.mean_square_error(predicted=predicted_biomass, day_layer=day_layers, night_layer=night_layers)
+        #     for obs in observations
+        # )
+        return predicted_biomass
 
     def generate(self: NoTransportCostFunction) -> Callable[[Iterable[float]], tuple]:
         """Generate the partial cost function used for optimization."""
