@@ -158,7 +158,7 @@ class GenericCostFunction(ABC):
     nb_parameters: int
     nb_functional_groups: int
     forcing_parameters: ForcingParameters
-    observations: ...
+    observations: Sequence[Observation]
     fixed_parameters: np.ndarray | None = None
 
     def __post_init__(self: GenericCostFunction) -> None:
@@ -212,7 +212,7 @@ class NoTransportCostFunction(GenericCostFunction):
         List of the functional groups name.
     forcing_parameters : ForcingParameters
         Forcing parameters.
-    observations : ...
+    observations : Sequence[Observation]
         Observations.
     fixed_parameters : np.ndarray
         Fixed parameters. The parameters order is : tr_max, tr_rate, inv_lambda_max, inv_lambda_rate, day_layer,
@@ -241,9 +241,7 @@ class NoTransportCostFunction(GenericCostFunction):
         args = fill_args(args, fixed_parameters)
         fg_parameters = FunctionalGroupGeneratorNoTransport(args, groups_name)
         day_layers = args[:, 4].flatten()
-        print(day_layers)
         night_layers = args[:, 5].flatten()
-        print(night_layers)
 
         model = NoTransportModel(
             configuration=NoTransportConfiguration(
@@ -257,12 +255,12 @@ class NoTransportCostFunction(GenericCostFunction):
 
         model.run()
 
-        predicted_biomass = model.export_biomass().pint.quantify().pint.to(BIOMASS_UNITS).pint.dequantify()
-        # return tuple(
-        #     obs.mean_square_error(predicted=predicted_biomass, day_layer=day_layers, night_layer=night_layers)
-        #     for obs in observations
-        # )
-        return predicted_biomass
+        predicted_biomass = model.export_biomass()
+
+        return tuple(
+            obs.mean_square_error(predicted=predicted_biomass, day_layer=day_layers, night_layer=night_layers)
+            for obs in observations
+        )
 
     def generate(self: NoTransportCostFunction) -> Callable[[Iterable[float]], tuple]:
         """Generate the partial cost function used for optimization."""

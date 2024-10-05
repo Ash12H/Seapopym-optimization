@@ -29,11 +29,6 @@ line-length = 120
 indent-width = 4
 
 [lint.extend-per-file-ignores]
-# PLR2004 : Magic values are used to validate the test
-# D101, D100, D102 : Missing docstring in test is allowed
-# ANN001, ANN101, ANN201 : Type annotation in test
-# PLR0913 : Too many arguments ?
-# ERA001 : Comments out of code ?
 "test/*" = [
     "S101",
     "SLF001",
