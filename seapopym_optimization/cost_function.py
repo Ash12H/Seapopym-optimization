@@ -105,22 +105,54 @@ class Observation:
 
 
 @dataclass
+class GenericFunctionalGroupOptimize(ABC):
+    """The Generic structure used to store the parameters of a functional group as used in SeapoPym."""
+
+    name: str
+
+    @abstractmethod
+    def as_tuple(self: GenericFunctionalGroupOptimize) -> tuple:
+        """Return a tuple that contains all the functional group parameters (except name)."""
+        pass
+
+
+@dataclass
+class FunctionalGroupOptimizeNoTransport(GenericFunctionalGroupOptimize):
+    """The parameters of a functional group as they are defined in the SeapoPym NoTransport model."""
+
+    tr_max: float = np.NAN
+    tr_rate: float = np.NAN
+    inv_lambda_max: float = np.NAN
+    inv_lambda_rate: float = np.NAN
+    day_layer: float = np.NAN
+    night_layer: float = np.NAN
+    energy_coefficient: float = np.NAN
+
+    def as_tuple(self: FunctionalGroupOptimizeNoTransport) -> tuple:
+        return (
+            self.tr_max,
+            self.tr_rate,
+            self.inv_lambda_max,
+            self.inv_lambda_rate,
+            self.day_layer,
+            self.night_layer,
+            self.energy_coefficient,
+        )
+
+
+@dataclass
 class GenericCostFunction(ABC):
     """
     Generic cost function class.
 
     Parameters
     ----------
-    nb_parameters : int
-        Number of parameters by functional group in the simulation.
-    nb_functional_groups : int
-        Number of functional groups in the simulation.
+    functional_groups: Sequence[GenericFunctionalGroupOptimize]
+        ...
     forcing_parameters : ForcingParameters
         Forcing parameters.
     observations : ...
         Observations.
-    fixed_parameters : np.ndarray
-        Fixed parameters.
 
     Notes
     -----
@@ -130,30 +162,19 @@ class GenericCostFunction(ABC):
 
     """
 
-    nb_parameters: int
-    nb_functional_groups: int
+    functional_groups: Sequence[GenericFunctionalGroupOptimize]
     forcing_parameters: ForcingParameters
     observations: Sequence[Observation]
-    fixed_parameters: np.ndarray | None = None
-
-    def __post_init__(self: GenericCostFunction) -> None:
-        """Check validity of the class."""
-        if self.fixed_parameters is None:
-            self.fixed_parameters = np.full((self.nb_functional_groups, self.nb_parameters), np.nan, dtype=float)
-        else:
-            self.fixed_parameters = np.asarray(self.fixed_parameters, dtype=float)
-
-        if self.fixed_parameters.shape != (self.nb_functional_groups, self.nb_parameters):
-            msg = f"Fixed parameters must have the shape ({self.nb_functional_groups}, {self.nb_parameters})"
-            raise ValueError(msg)
 
     @abstractmethod
     def cost_function(
         self: GenericCostFunction,
         args: np.ndarray,
+        groups_name: Sequence[str],
         fixed_parameters: np.ndarray,
         forcing_parameters: ForcingParameters,
-        observations: ...,
+        observations: Sequence[Observation],
+        **kwargs: dict,
     ) -> tuple:
         """
         Calculate the cost of the simulation.
@@ -163,9 +184,12 @@ class GenericCostFunction(ABC):
 
     def generate(self: GenericCostFunction) -> Callable[[Iterable[float]], tuple]:
         """Generate the partial cost function used for optimization."""
+        groups_name = tuple(fg.name for fg in self.functional_groups)
+        fixed_parameters = np.asarray(tuple(fg.as_tuple() for fg in self.functional_groups))
         return partial(
             self.cost_function,
-            fixed_parameters=self.fixed_parameters,
+            groups_name=groups_name,
+            fixed_parameters=fixed_parameters,
             forcing_parameters=self.forcing_parameters,
             observations=self.observations,
         )
@@ -174,35 +198,18 @@ class GenericCostFunction(ABC):
 @dataclass
 class NoTransportCostFunction(GenericCostFunction):
     """
-    Generator of the cost function for the 'SeapoPym No Transport' model. Consider all stations at once without
-    weights.
+    Generator of the cost function for the 'SeapoPym No Transport' model.
 
     Attributes
     ----------
-    nb_parameters : int
-        Number of parameters by functional group in the simulation.
-    nb_functional_groups : int
-        Number of functional groups in the simulation.
-    groups_name : list[str]
-        List of the functional groups name.
+    functional_groups: Sequence[FunctionalGroupOptimizeNoTransport]
+        ...
     forcing_parameters : ForcingParameters
         Forcing parameters.
     observations : Sequence[Observation]
         Observations.
-    fixed_parameters : np.ndarray
-        Fixed parameters. The parameters order is : tr_max, tr_rate, inv_lambda_max, inv_lambda_rate, day_layer,
-        night_layer, energy_transfert.
 
     """
-
-    groups_name: list[str] = None
-
-    def __post_init__(self: NoTransportCostFunction) -> None:
-        """Check validity of the class."""
-        super().__post_init__()
-
-        if self.groups_name is None:
-            self.groups_name = [f"FG_{i}" for i in range(self.nb_functional_groups)]
 
     def fill_args(self: NoTransportCostFunction, args: np.ndarray, fixed_parameters: np.ndarray) -> np.ndarray:
         """
@@ -231,10 +238,10 @@ class NoTransportCostFunction(GenericCostFunction):
     def cost_function(
         self: NoTransportCostFunction,
         args: np.ndarray,
+        groups_name: Sequence[str],
         fixed_parameters: np.ndarray,
         forcing_parameters: ForcingParameters,
         observations: Sequence[Observation],
-        groups_name: list[str],
         **kwargs: dict,
     ) -> tuple:
         args = self.fill_args(args, fixed_parameters)
@@ -259,14 +266,4 @@ class NoTransportCostFunction(GenericCostFunction):
         return tuple(
             obs.mean_square_error(predicted=predicted_biomass, day_layer=day_layers, night_layer=night_layers)
             for obs in observations
-        )
-
-    def generate(self: NoTransportCostFunction) -> Callable[[Iterable[float]], tuple]:
-        """Generate the partial cost function used for optimization."""
-        return partial(
-            self._cost_function,
-            fixed_parameters=self.fixed_parameters,
-            forcing_parameters=self.forcing_parameters,
-            observations=self.observations,
-            groups_name=self.groups_name,
         )

@@ -14,16 +14,7 @@ lint.ignore = [
     "SIM115",
 ]
 extend-include = ["*.ipynb"]
-exclude = [
-    ".eggs",
-    ".git",
-    ".venv",
-    "__pypackages__",
-    "build",
-    "tests",
-    "__init__.py",
-    "test",
-]
+exclude = [".eggs", ".git", ".venv", "__pypackages__", "build", "__init__.py"]
 
 line-length = 120
 indent-width = 4

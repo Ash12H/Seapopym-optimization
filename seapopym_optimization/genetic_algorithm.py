@@ -74,7 +74,7 @@ class GeneticAlgorithmParameters:
     NGEN: int
     POP_SIZE: int
     cost_function_weight: tuple | float = (-1.0,)
-    hall_of_fame_size: int
+    hall_of_fame_size: int = 100
 
     # TODO(Jules): Add default parameters for : mate method, mutate method, select method
 
