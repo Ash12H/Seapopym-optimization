@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING, Callable, Sequence
 
 import numpy as np
+import pandas as pd
+import plotly.express as px
 from dask.distributed import Client
-from deap import algorithms, base, creator, tools
-
-from seapopym_optimization.constraint import GenericConstraint
+from deap import algorithms, base, tools
+from plotly.subplots import make_subplots
 
 if TYPE_CHECKING:
-    from seapopym_optimization.cost_function import GenericCostFunction, Parameter, GenericFunctionalGroupOptimize
+    from seapopym_optimization.constraint import GenericConstraint
+    from seapopym_optimization.cost_function import GenericCostFunction, Parameter
 
 
 @dataclass
@@ -55,6 +57,7 @@ class GeneticAlgorithmParameters:
         toolbox = base.Toolbox()
 
         # NOTE(Jules): WITHOUT CREATOR -----------------------------
+        # I use self made structure because Dask doesn't work with the individuals created with deap.creator.
 
         class Fitness(base.Fitness):
             weights = self.cost_function_weight
@@ -112,12 +115,66 @@ class GeneticAlgorithmViewer:
     results.
     """
 
-    population: Sequence[Sequence[float]]
-    logbook: tools.Logbook
-    hall_of_fame: tools.HallOfFame
+    _parameters: Sequence[Parameter]
+    _population: Sequence[Sequence[float]]
+    _logbook: tools.Logbook
+    _hall_of_fame: tools.HallOfFame
 
-    def show(self: GeneticAlgorithmViewer):
-        """Show informations about the optimization results in different plots."""
+    @property
+    def parameters_names(self: GeneticAlgorithmViewer):
+        return [fg.name for fg in self._parameters]
+
+    @property
+    def parameters_lower_bounds(self: GeneticAlgorithmViewer):
+        return [fg.lower_bound for fg in self._parameters]
+
+    @property
+    def parameters_upper_bound(self: GeneticAlgorithmViewer):
+        return [fg.upper_bound for fg in self._parameters]
+
+    @property
+    def logbook(self: GeneticAlgorithmViewer) -> pd.DataFrame:
+        """A review of the generations stats."""
+        return pd.DataFrame(self._logbook)
+
+    @property
+    def hall_of_fame(self: GeneticAlgorithmViewer) -> pd.DataFrame:
+        """The best individuals and their fitness."""
+        hof = pd.DataFrame(self._hall_of_fame, columns=self.parameters_names)
+        hof["fitness"] = [ind.fitness.values[0] for ind in self._hall_of_fame]
+        return hof[np.isfinite(hof["fitness"])]
+
+    def box_plot(self: GeneticAlgorithmViewer, columns_number: int):
+        nb_fig = len(self.parameters_names)
+        nb_row = nb_fig // columns_number + (1 if nb_fig % columns_number > 0 else 0)
+
+        fig = make_subplots(rows=nb_row, cols=columns_number, subplot_titles=self.parameters_names)
+
+        for i, (a, b, c) in enumerate(
+            zip(self.parameters_names, self.parameters_lower_bounds, self.parameters_upper_bound)
+        ):
+            fig.add_trace(
+                px.box(data_frame=self.hall_of_fame, y=a, range_y=(b, c), title=a).data[0],
+                row=(i // columns_number) + 1,
+                col=(i % columns_number) + 1,
+            )
+
+        return fig
+
+    def parallel_coordinates(self: GeneticAlgorithmViewer):
+        hof_fitness = self.hall_of_fame
+        hof_fitness["fitness"] = hof_fitness["fitness"] / hof_fitness["fitness"].max()
+        fig = px.parallel_coordinates(
+            hof_fitness,
+            color="fitness",
+            dimensions=self.parameters_names,
+            labels=self.parameters_names,
+            color_continuous_scale=[[0, "rgb(255,0,0,0.5)"], [0.6, "rgb(200,0,0,0.5)"], [1, "green"]],
+            title="BATS parameters optimization",
+        )
+
+        fig.update_layout(coloraxis_colorbar={"title": "Fitness"})
+        return fig
 
 
 # TODO(Jules): Use Param library rather than dataclass ?
@@ -142,6 +199,16 @@ class GeneticAlgorithm:
             parameter_optimize += fg.get_parameters_to_optimize()
         return parameter_optimize
 
+    def _helper_main_manage_inf(self: GeneticAlgorithm, func: Callable) -> Callable:
+        """Transforme the function to manage np.inf values returned by the constraints."""
+
+        def new_function(arg):
+            arg = np.asarray(arg)
+            arg = arg[np.isfinite(arg)]
+            return func(arg)
+
+        return new_function
+
     def main(
         self: GeneticAlgorithm, toolbox: base.Toolbox
     ) -> tuple[Sequence[Sequence[float]], tools.Logbook, tools.HallOfFame]:
@@ -153,10 +220,12 @@ class GeneticAlgorithm:
         halloffame = tools.HallOfFame(self.parameter_genetic_algorithm.hall_of_fame_size)
 
         stats = tools.Statistics(lambda ind: ind.fitness.values)
-        stats.register("avg", np.mean)
-        stats.register("std", np.std)
-        stats.register("min", np.min)
-        stats.register("max", np.max)
+        stats.register("avg", self._helper_main_manage_inf(np.nanmean))
+        stats.register("std", self._helper_main_manage_inf(np.nanstd))
+        stats.register("min", self._helper_main_manage_inf(np.nanmin))
+        stats.register("max", self._helper_main_manage_inf(np.nanmax))
+        stats.register("nvalide", lambda x: np.isfinite(x).sum())
+        stats.register("ninvalide", lambda x: (~np.isfinite(x)).sum())
 
         logbook = tools.Logbook()
         logbook.header = ["gen", "nevals"] + (stats.fields if stats else [])
@@ -215,13 +284,8 @@ class GeneticAlgorithm:
 
     def optimize(self: GeneticAlgorithm) -> GeneticAlgorithmViewer:
         toolbox = self.parameter_genetic_algorithm.generate_toolbox(self.parameter_optimize, self.cost_function)
-
-        # TODO(Jules): Pour le moment les contraintes sont incompatibles avec le calcul parallele avec DASK.
-        # Le preoblème vient du fait que l'on utilise un list plutot que les structures définies par DEAP
-        # CF. `invalid_ind_as_list`
-
         ordered_names = self.cost_function.parameters_name
         for constraint in self.constraint:
             toolbox.decorate("evaluate", constraint.generate(ordered_names))
         result = self.main(toolbox)
-        return GeneticAlgorithmViewer(*result)
+        return GeneticAlgorithmViewer(self.parameter_optimize, *result)
