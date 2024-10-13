@@ -2,62 +2,17 @@
 
 from __future__ import annotations
 
-import random
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Sequence
+from typing import TYPE_CHECKING, Sequence
 
 import numpy as np
 from dask.distributed import Client
 from deap import algorithms, base, creator, tools
 
+from seapopym_optimization.constraint import GenericConstraint
+
 if TYPE_CHECKING:
-    from seapopym_optimization.cost_function import GenericCostFunction
-
-MAXIMUM_INIT_TRY = 1000
-
-
-@dataclass
-class Parameter:
-    """
-    The definition of a parameter to optimize.
-
-    Parameters
-    ----------
-    name: str
-        ...
-    lower_bound: float
-        ...
-    upper_bound: float
-        ...
-    init_method: Callable[[float, float], float], optional
-        The method used to get the initial value of a parameter. Default is a random uniform distribution that exclude
-        the bounds values.
-
-    """
-
-    name: str
-    lower_bound: float
-    upper_bound: float
-    init_method: Callable[[float, float], float] = None
-
-    def __post_init__(self: Parameter) -> None:
-        if self.lower_bound >= self.upper_bound:
-            msg = f"Lower bounds ({self.lower_bound}) must be <= to upper bound ({self.upper_bound})."
-            raise ValueError(msg)
-
-        if self.init_method is None:
-
-            def random_exclusive(lower: float, upper: float) -> float:
-                count = 0
-                while count < MAXIMUM_INIT_TRY:
-                    value = random.uniform(lower, upper)
-                    if value not in (lower, upper):
-                        return value
-                    count += 1
-                msg = f"Random parameter initialization reach maximum try for parameter {self.name}"
-                raise ValueError(msg)
-
-            self.init_method = random_exclusive
+    from seapopym_optimization.cost_function import GenericCostFunction, Parameter, GenericFunctionalGroupOptimize
 
 
 @dataclass
@@ -77,12 +32,6 @@ class GeneticAlgorithmParameters:
     hall_of_fame_size: int = 100
 
     # TODO(Jules): Add default parameters for : mate method, mutate method, select method
-
-    def __post_init__(self: GeneticAlgorithmParameters) -> None:
-        """Check parameters."""
-        if sum(self.cost_function_weight) != 1:
-            msg = "The sum of the cost function weight must equal 1."
-            raise ValueError(msg)
 
     def generate_toolbox(
         self: GeneticAlgorithmParameters, parameters: Sequence[Parameter], cost_function: GenericCostFunction
@@ -105,22 +54,44 @@ class GeneticAlgorithmParameters:
         """
         toolbox = base.Toolbox()
 
-        creator.create("Fitness", base.Fitness, weights=self.cost_function_weight)
-        creator.create("Individual", list, fitness=creator.Fitness)
+        # NOTE(Jules): WITHOUT CREATOR -----------------------------
+
+        class Fitness(base.Fitness):
+            weights = self.cost_function_weight
+
+        class Individual(list):
+            def __init__(self: Individual, iterator):
+                super().__init__(iterator)
+                self.fitness = Fitness()
 
         for param in parameters:
             toolbox.register(param.name, param.init_method, param.lower_bound, param.upper_bound)
 
-        toolbox.register(
-            "individual",
-            tools.initCycle,
-            creator.Individual,
-            tuple(toolbox.__dict__[param.name] for param in parameters),
-            n=1,
-        )
+        def individual():
+            return Individual([param.init_method(param.lower_bound, param.upper_bound) for param in parameters])
 
-        toolbox.register("population", tools.initRepeat, list, toolbox.individual)
-        toolbox.register("evaluate", cost_function)
+        toolbox.register("population", tools.initRepeat, list, individual)
+
+        # ----------------------------------------------------------
+
+        # NOTE(Jules): WITH CREATOR -----------------------------
+
+        # creator.create("Fitness", base.Fitness, weights=self.cost_function_weight)
+        # creator.create("Individual", list, fitness=creator.Fitness)
+        # for param in parameters:
+        #     toolbox.register(param.name, param.init_method, param.lower_bound, param.upper_bound)
+
+        # toolbox.register(
+        #     "individual",
+        #     tools.initCycle,
+        #     creator.Individual,
+        #     tuple(toolbox.__dict__[param.name] for param in parameters),
+        # )
+        # toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+
+        # ----------------------------------------------------------
+
+        toolbox.register("evaluate", cost_function.generate())
         toolbox.register("mate", tools.cxTwoPoint)
         toolbox.register(
             "mutate",
@@ -152,15 +123,24 @@ class GeneticAlgorithmViewer:
 # TODO(Jules): Use Param library rather than dataclass ?
 @dataclass
 class GeneticAlgorithm:
-    parameter_optimize: Sequence[Parameter]
     parameter_genetic_algorithm: GeneticAlgorithmParameters
     cost_function: GenericCostFunction
-    client: Client = None
+    client: Client | None = None
+    constraint: Sequence[GenericConstraint] | None = None
 
     def __post_init__(self: GeneticAlgorithm) -> None:
         """Check parameters."""
         if self.client is None:
             self.client = Client()
+        # TODO(Jules): Vérifier que les paramètres ont des noms uniques.
+
+    @property
+    def parameter_optimize(self: GeneticAlgorithm) -> Sequence[Parameter]:
+        """The list of the parameters to optimize."""
+        parameter_optimize = []
+        for fg in self.cost_function.functional_groups:
+            parameter_optimize += fg.get_parameters_to_optimize()
+        return parameter_optimize
 
     def main(
         self: GeneticAlgorithm, toolbox: base.Toolbox
@@ -182,8 +162,14 @@ class GeneticAlgorithm:
         logbook.header = ["gen", "nevals"] + (stats.fields if stats else [])
 
         invalid_ind = [ind for ind in population if not ind.fitness.valid]
-        invalid_ind_as_list = [list(ind) for ind in invalid_ind]  # For compatibility with DASK
-        futures_results = self.client.map(toolbox.evaluate, invalid_ind_as_list)
+        # NOTE(Jules): Using individuals (i.e. Fitness) with Dask does not work. It must be converted to list.
+        # But when converted to list, the constraint does not work.
+        # invalid_ind_as_list = [list(ind) for ind in invalid_ind]  # For compatibility with DASK
+        # futures_results = self.client.map(toolbox.evaluate, invalid_ind_as_list)
+        #
+        # NOTE(Jules): Here is the original version
+        futures_results = self.client.map(toolbox.evaluate, invalid_ind)
+        # -------------------------------------------------------------------------------------------------- #
         fitnesses = self.client.gather(futures_results)
         for ind, fit in zip(invalid_ind, fitnesses):
             ind.fitness.values = fit
@@ -202,10 +188,18 @@ class GeneticAlgorithm:
             )  # MUTATE + MATE
 
             invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-            fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
-            invalid_ind_as_list = [list(ind) for ind in invalid_ind]  # For compatibility with DASK
-            futures_results = self.client.map(toolbox.evaluate, invalid_ind_as_list)
+
+            # NOTE(Jules): Using individuals (i.e. Fitness) with Dask does not work. It must be converted to list.
+            # But when converted to list, the constraint does not work.
+            # invalid_ind_as_list = [list(ind) for ind in invalid_ind]  # For compatibility with DASK
+            # futures_results = self.client.map(toolbox.evaluate, invalid_ind_as_list)
+            #
+            # NOTE(Jules): Here is the original version
+            futures_results = self.client.map(toolbox.evaluate, invalid_ind)
+            # -------------------------------------------------------------------------------------------------- #
+
             fitnesses = self.client.gather(futures_results)
+
             for ind, fit in zip(invalid_ind, fitnesses):
                 ind.fitness.values = fit
 
@@ -221,5 +215,13 @@ class GeneticAlgorithm:
 
     def optimize(self: GeneticAlgorithm) -> GeneticAlgorithmViewer:
         toolbox = self.parameter_genetic_algorithm.generate_toolbox(self.parameter_optimize, self.cost_function)
+
+        # TODO(Jules): Pour le moment les contraintes sont incompatibles avec le calcul parallele avec DASK.
+        # Le preoblème vient du fait que l'on utilise un list plutot que les structures définies par DEAP
+        # CF. `invalid_ind_as_list`
+
+        ordered_names = self.cost_function.parameters_name
+        for constraint in self.constraint:
+            toolbox.decorate("evaluate", constraint.generate(ordered_names))
         result = self.main(toolbox)
-        return GeneticAlgorithmViewer(result)
+        return GeneticAlgorithmViewer(*result)

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+import random
+from abc import ABC, abstractmethod, abstractproperty
 from dataclasses import dataclass
 from functools import partial
 from typing import Callable, Iterable, Sequence
@@ -20,6 +21,7 @@ from seapopym.model.no_transport_model import NoTransportModel
 from seapopym_optimization.wrapper import FunctionalGroupGeneratorNoTransport
 
 BIOMASS_UNITS = "kg/m2"
+MAXIMUM_INIT_TRY = 1000
 
 
 @dataclass
@@ -105,30 +107,93 @@ class Observation:
 
 
 @dataclass
+class Parameter:
+    """
+    The definition of a parameter to optimize.
+
+    Parameters
+    ----------
+    name: str
+        ...
+    lower_bound: float
+        ...
+    upper_bound: float
+        ...
+    init_method: Callable[[float, float], float], optional
+        The method used to get the initial value of a parameter. Default is a random uniform distribution that exclude
+        the bounds values.
+
+    """
+
+    name: str
+    lower_bound: float
+    upper_bound: float
+    init_method: Callable[[float, float], float] = None
+
+    def __post_init__(self: Parameter) -> None:
+        if self.lower_bound >= self.upper_bound:
+            msg = f"Lower bounds ({self.lower_bound}) must be <= to upper bound ({self.upper_bound})."
+            raise ValueError(msg)
+
+        if self.init_method is None:
+
+            def random_exclusive(lower: float, upper: float) -> float:
+                count = 0
+                while count < MAXIMUM_INIT_TRY:
+                    value = random.uniform(lower, upper)
+                    if value not in (lower, upper):
+                        return value
+                    count += 1
+                msg = f"Random parameter initialization reach maximum try for parameter {self.name}"
+                raise ValueError(msg)
+
+            self.init_method = random_exclusive
+
+
+@dataclass
 class GenericFunctionalGroupOptimize(ABC):
     """The Generic structure used to store the parameters of a functional group as used in SeapoPym."""
 
     name: str
 
+    @property
     @abstractmethod
-    def as_tuple(self: GenericFunctionalGroupOptimize) -> tuple:
-        """Return a tuple that contains all the functional group parameters (except name)."""
-        pass
+    def parameters(self: GenericFunctionalGroupOptimize) -> tuple:
+        """
+        Return the parameters representing the functional group.
+
+        Warning:
+        -------
+        Order of declaration is the same as in the cost_function.
+
+        """
+
+    @abstractmethod
+    def as_tuple(self: GenericFunctionalGroupOptimize) -> Sequence[float]:
+        """
+        Return a tuple that contains all the functional group parameters (except name) as float values. When value is
+        not set, return np.NAN.
+        """
+
+    @abstractmethod
+    def get_parameters_to_optimize() -> Sequence[Parameter]:
+        """Return the parameters to optimize as a sequence of `Parameter`."""
 
 
 @dataclass
 class FunctionalGroupOptimizeNoTransport(GenericFunctionalGroupOptimize):
     """The parameters of a functional group as they are defined in the SeapoPym NoTransport model."""
 
-    tr_max: float = np.NAN
-    tr_rate: float = np.NAN
-    inv_lambda_max: float = np.NAN
-    inv_lambda_rate: float = np.NAN
-    day_layer: float = np.NAN
-    night_layer: float = np.NAN
-    energy_coefficient: float = np.NAN
+    tr_max: float | Parameter
+    tr_rate: float | Parameter
+    inv_lambda_max: float | Parameter
+    inv_lambda_rate: float | Parameter
+    day_layer: float | Parameter
+    night_layer: float | Parameter
+    energy_coefficient: float | Parameter
 
-    def as_tuple(self: FunctionalGroupOptimizeNoTransport) -> tuple:
+    @property
+    def parameters(self: FunctionalGroupOptimizeNoTransport) -> tuple:
         return (
             self.tr_max,
             self.tr_rate,
@@ -138,6 +203,12 @@ class FunctionalGroupOptimizeNoTransport(GenericFunctionalGroupOptimize):
             self.night_layer,
             self.energy_coefficient,
         )
+
+    def as_tuple(self: FunctionalGroupOptimizeNoTransport) -> tuple:
+        return tuple(np.nan if isinstance(param, Parameter) else param for param in self.parameters)
+
+    def get_parameters_to_optimize(self: FunctionalGroupOptimizeNoTransport) -> Sequence[Parameter]:
+        return tuple(param for param in self.parameters if isinstance(param, Parameter))
 
 
 @dataclass
@@ -166,8 +237,13 @@ class GenericCostFunction(ABC):
     forcing_parameters: ForcingParameters
     observations: Sequence[Observation]
 
+    @property
     @abstractmethod
-    def cost_function(
+    def parameters_name(self: GenericCostFunction) -> Sequence[str]:
+        """Return the ordered list of parameters name."""
+
+    @abstractmethod
+    def _cost_function(
         self: GenericCostFunction,
         args: np.ndarray,
         groups_name: Sequence[str],
@@ -187,7 +263,7 @@ class GenericCostFunction(ABC):
         groups_name = tuple(fg.name for fg in self.functional_groups)
         fixed_parameters = np.asarray(tuple(fg.as_tuple() for fg in self.functional_groups))
         return partial(
-            self.cost_function,
+            self._cost_function,
             groups_name=groups_name,
             fixed_parameters=fixed_parameters,
             forcing_parameters=self.forcing_parameters,
@@ -203,7 +279,7 @@ class NoTransportCostFunction(GenericCostFunction):
     Attributes
     ----------
     functional_groups: Sequence[FunctionalGroupOptimizeNoTransport]
-        ...
+        The list of functional groups.
     forcing_parameters : ForcingParameters
         Forcing parameters.
     observations : Sequence[Observation]
@@ -211,7 +287,17 @@ class NoTransportCostFunction(GenericCostFunction):
 
     """
 
-    def fill_args(self: NoTransportCostFunction, args: np.ndarray, fixed_parameters: np.ndarray) -> np.ndarray:
+    NO_TRANSPORT_DAY_LAYER_POS = 4
+    NO_TRANSPORT_NIGHT_LAYER_POS = 5
+
+    @property
+    def parameters_name(self: NoTransportCostFunction) -> Sequence[str]:
+        names = []
+        for fg in self.functional_groups:
+            names += [param.name for param in fg.get_parameters_to_optimize()]
+        return names
+
+    def _fill_args(self: NoTransportCostFunction, args: np.ndarray, fixed_parameters: np.ndarray) -> np.ndarray:
         """
         Fill the fixed parameters in the args. Used to get all the parameters needed for the simulation.
 
@@ -235,7 +321,7 @@ class NoTransportCostFunction(GenericCostFunction):
         args_flat[np.isnan(args_flat)] = args
         return args_flat.reshape(initial_shape)
 
-    def cost_function(
+    def _cost_function(
         self: NoTransportCostFunction,
         args: np.ndarray,
         groups_name: Sequence[str],
@@ -244,10 +330,10 @@ class NoTransportCostFunction(GenericCostFunction):
         observations: Sequence[Observation],
         **kwargs: dict,
     ) -> tuple:
-        args = self.fill_args(args, fixed_parameters)
+        args = self._fill_args(args, fixed_parameters)
         fg_parameters = FunctionalGroupGeneratorNoTransport(args, groups_name)
-        day_layers = args[:, 4].flatten()
-        night_layers = args[:, 5].flatten()
+        day_layers = args[:, self.NO_TRANSPORT_DAY_LAYER_POS].flatten()
+        night_layers = args[:, self.NO_TRANSPORT_NIGHT_LAYER_POS].flatten()
 
         model = NoTransportModel(
             configuration=NoTransportConfiguration(
