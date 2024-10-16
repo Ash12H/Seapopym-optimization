@@ -6,5 +6,5 @@
     "calendar": "proleptic_gregorian",
     "long_name": "time",
     "standard_name": "time",
-    "units": "days since 1988-10-31"
+    "units": "days since 1994-02-17"
 }

@@ -37,8 +37,8 @@
         "CAFE/.zattrs": {
             "_ARRAY_DIMENSIONS": [
                 "time",
-                "lat",
-                "lon"
+                "latitude",
+                "longitude"
             ],
             "adg wavelength": "443nm",
             "aph wavelength": "443nm",
@@ -53,7 +53,7 @@
             "standard_name": "NPP",
             "units": "mg m-2 day-1"
         },
-        "lat/.zarray": {
+        "latitude/.zarray": {
             "chunks": [
                 1
             ],
@@ -73,12 +73,15 @@
             ],
             "zarr_format": 2
         },
-        "lat/.zattrs": {
+        "latitude/.zattrs": {
             "_ARRAY_DIMENSIONS": [
-                "lat"
-            ]
+                "latitude"
+            ],
+            "axis": "Y",
+            "long_name": "latitude",
+            "units": "degrees_north"
         },
-        "lon/.zarray": {
+        "longitude/.zarray": {
             "chunks": [
                 1
             ],
@@ -98,10 +101,13 @@
             ],
             "zarr_format": 2
         },
-        "lon/.zattrs": {
+        "longitude/.zattrs": {
             "_ARRAY_DIMENSIONS": [
-                "lon"
-            ]
+                "longitude"
+            ],
+            "axis": "X",
+            "long_name": "longitude",
+            "units": "degrees_east"
         },
         "time/.zarray": {
             "chunks": [

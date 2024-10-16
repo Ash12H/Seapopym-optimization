@@ -287,8 +287,15 @@ class NoTransportCostFunction(GenericCostFunction):
 
     """
 
+    kwargs: dict | None = None
+    # TODO(Jules): Replace kwargs by the NoTransport configuration structure -> Env and Kernel
+
     NO_TRANSPORT_DAY_LAYER_POS = 4
     NO_TRANSPORT_NIGHT_LAYER_POS = 5
+
+    def __post_init__(self: NoTransportCostFunction):
+        if self.kwargs is None:
+            self.kwargs = {}
 
     @property
     def parameters_name(self: NoTransportCostFunction) -> Sequence[str]:
@@ -347,7 +354,7 @@ class NoTransportCostFunction(GenericCostFunction):
 
         model.run()
 
-        predicted_biomass = model.export_biomass()
+        predicted_biomass = model.export_biomass().load()
 
         return tuple(
             obs.mean_square_error(predicted=predicted_biomass, day_layer=day_layers, night_layer=night_layers)

@@ -22,6 +22,9 @@ class GeneticAlgorithmParameters:
     """
     The structure used to store the genetic algorithm parameters. Can generate the toolbox with default
     parameters.
+
+    # TODO(Jules): Describe the parameters
+
     """
 
     ETA: float
@@ -162,6 +165,7 @@ class GeneticAlgorithmViewer:
         return fig
 
     def parallel_coordinates(self: GeneticAlgorithmViewer):
+        """TODO(Jules): Let the user select the number of individual to print."""
         hof_fitness = self.hall_of_fame
         hof_fitness["fitness"] = hof_fitness["fitness"] / hof_fitness["fitness"].max()
         fig = px.parallel_coordinates(
@@ -187,8 +191,6 @@ class GeneticAlgorithm:
 
     def __post_init__(self: GeneticAlgorithm) -> None:
         """Check parameters."""
-        if self.client is None:
-            self.client = Client()
         # TODO(Jules): Vérifier que les paramètres ont des noms uniques.
 
     @property
@@ -199,55 +201,78 @@ class GeneticAlgorithm:
             parameter_optimize += fg.get_parameters_to_optimize()
         return parameter_optimize
 
-    def _helper_main_manage_inf(self: GeneticAlgorithm, func: Callable) -> Callable:
+    def _helper_core_manage_inf(self: GeneticAlgorithm, func: Callable) -> Callable:
         """Transforme the function to manage np.inf values returned by the constraints."""
 
-        def new_function(arg):
+        def wrapper(arg):
             arg = np.asarray(arg)
-            arg = arg[np.isfinite(arg)]
+            valide = np.isfinite(arg)
+            if np.sum(valide) == 0:
+                return np.nan
+            arg = arg[valide]
             return func(arg)
 
-        return new_function
+        return wrapper
 
-    def main(
-        self: GeneticAlgorithm, toolbox: base.Toolbox
-    ) -> tuple[Sequence[Sequence[float]], tools.Logbook, tools.HallOfFame]:
-        """
-        The main function as it is desrcibed in the DEAP documentation. It is adapted to include Dask client for
-        parallel computing.
-        """
-        population = toolbox.population(n=self.parameter_genetic_algorithm.POP_SIZE)
+    def _helper_core_initialize_viewer_containt(
+        self: GeneticAlgorithm,
+    ) -> tuple[tools.HallOfFame, tools.Logbook, tools.Statistics]:
+        """Initialize all the structures needed by the `viewer`."""
         halloffame = tools.HallOfFame(self.parameter_genetic_algorithm.hall_of_fame_size)
 
         stats = tools.Statistics(lambda ind: ind.fitness.values)
-        stats.register("avg", self._helper_main_manage_inf(np.nanmean))
-        stats.register("std", self._helper_main_manage_inf(np.nanstd))
-        stats.register("min", self._helper_main_manage_inf(np.nanmin))
-        stats.register("max", self._helper_main_manage_inf(np.nanmax))
+        stats.register("avg", self._helper_core_manage_inf(np.nanmean))
+        stats.register("std", self._helper_core_manage_inf(np.nanstd))
+        stats.register("min", self._helper_core_manage_inf(np.nanmin))
+        stats.register("max", self._helper_core_manage_inf(np.nanmax))
         stats.register("nvalide", lambda x: np.isfinite(x).sum())
         stats.register("ninvalide", lambda x: (~np.isfinite(x)).sum())
 
         logbook = tools.Logbook()
         logbook.header = ["gen", "nevals"] + (stats.fields if stats else [])
 
-        invalid_ind = [ind for ind in population if not ind.fitness.valid]
-        # NOTE(Jules): Using individuals (i.e. Fitness) with Dask does not work. It must be converted to list.
-        # But when converted to list, the constraint does not work.
-        # invalid_ind_as_list = [list(ind) for ind in invalid_ind]  # For compatibility with DASK
-        # futures_results = self.client.map(toolbox.evaluate, invalid_ind_as_list)
-        #
-        # NOTE(Jules): Here is the original version
-        futures_results = self.client.map(toolbox.evaluate, invalid_ind)
-        # -------------------------------------------------------------------------------------------------- #
-        fitnesses = self.client.gather(futures_results)
+        return halloffame, logbook, stats
+
+    def _helper_core_evaluate(
+        self: GeneticAlgorithm,
+        toolbox: base.Toolbox,
+        individuals: Sequence,
+        logbook: tools.Logbook,
+        halloffame: tools.HallOfFame,
+        stats: tools.Statistics,
+        generation: int,
+    ) -> tuple[tools.Logbook, tools.HallOfFame]:
+        """Evaluate the cost function and update the statistiques."""
+        invalid_ind = [ind for ind in individuals if not ind.fitness.valid]
+        if self.client is None:
+            fitnesses = list(map(toolbox.evaluate, invalid_ind))
+        else:
+            futures_results = self.client.map(toolbox.evaluate, invalid_ind)
+            fitnesses = self.client.gather(futures_results)
+
         for ind, fit in zip(invalid_ind, fitnesses):
             ind.fitness.values = fit
 
         if halloffame is not None:
-            halloffame.update(population)
+            halloffame.update(individuals)
 
-        record = stats.compile(population) if stats else {}
-        logbook.record(gen=0, nevals=len(invalid_ind), **record)
+        record = stats.compile(individuals) if stats else {}
+        logbook.record(gen=generation, nevals=len(invalid_ind), **record)
+
+        return logbook, halloffame
+
+    def _core(
+        self: GeneticAlgorithm, toolbox: base.Toolbox
+    ) -> tuple[Sequence[Sequence[float]], tools.Logbook, tools.HallOfFame]:
+        """
+        The core function as it is described in the DEAP documentation. It is adapted to allow Dask client for
+        parallel computing.
+        """
+        halloffame, logbook, stats = self._helper_core_initialize_viewer_containt()
+
+        population = toolbox.population(n=self.parameter_genetic_algorithm.POP_SIZE)
+
+        logbook, halloffame = self._helper_core_evaluate(toolbox, population, logbook, halloffame, stats, generation=0)
 
         for gen in range(1, self.parameter_genetic_algorithm.NGEN + 1):
             offspring = toolbox.select(population, len(population))
@@ -256,36 +281,17 @@ class GeneticAlgorithm:
                 offspring, toolbox, self.parameter_genetic_algorithm.CXPB, self.parameter_genetic_algorithm.MUTPB
             )  # MUTATE + MATE
 
-            invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-
-            # NOTE(Jules): Using individuals (i.e. Fitness) with Dask does not work. It must be converted to list.
-            # But when converted to list, the constraint does not work.
-            # invalid_ind_as_list = [list(ind) for ind in invalid_ind]  # For compatibility with DASK
-            # futures_results = self.client.map(toolbox.evaluate, invalid_ind_as_list)
-            #
-            # NOTE(Jules): Here is the original version
-            futures_results = self.client.map(toolbox.evaluate, invalid_ind)
-            # -------------------------------------------------------------------------------------------------- #
-
-            fitnesses = self.client.gather(futures_results)
-
-            for ind, fit in zip(invalid_ind, fitnesses):
-                ind.fitness.values = fit
-
-            if halloffame is not None:
-                halloffame.update(offspring)
+            logbook, halloffame = self._helper_core_evaluate(toolbox, offspring, logbook, halloffame, stats, gen)
 
             population[:] = offspring
-
-            record = stats.compile(population) if stats else {}
-            logbook.record(gen=gen, nevals=len(invalid_ind), **record)
 
         return population, logbook, halloffame
 
     def optimize(self: GeneticAlgorithm) -> GeneticAlgorithmViewer:
+        """This is the main function. Use it to optimize your model."""
         toolbox = self.parameter_genetic_algorithm.generate_toolbox(self.parameter_optimize, self.cost_function)
         ordered_names = self.cost_function.parameters_name
         for constraint in self.constraint:
             toolbox.decorate("evaluate", constraint.generate(ordered_names))
-        result = self.main(toolbox)
+        result = self._core(toolbox)
         return GeneticAlgorithmViewer(self.parameter_optimize, *result)

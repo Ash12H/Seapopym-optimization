@@ -3,7 +3,7 @@
         "latitude"
     ],
     "axis": "Y",
-    "long_name": "latitude",
+    "long_name": "Latitude",
     "standard_name": "latitude",
     "units": "degrees_north"
 }

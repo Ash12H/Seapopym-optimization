@@ -1,8 +1,8 @@
 {
     "_ARRAY_DIMENSIONS": [
         "time",
-        "lat",
-        "lon"
+        "latitude",
+        "longitude"
     ],
     "adg wavelength": "443nm",
     "aph wavelength": "443nm",
