@@ -8,11 +8,13 @@ from typing import TYPE_CHECKING, Callable, Sequence
 import numpy as np
 import pandas as pd
 import plotly.express as px
-from dask.distributed import Client
 from deap import algorithms, base, tools
 from plotly.subplots import make_subplots
 
 if TYPE_CHECKING:
+    from dask.distributed import Client
+    from plotly.graph_objects import Figure
+
     from seapopym_optimization.constraint import GenericConstraint
     from seapopym_optimization.cost_function import GenericCostFunction, Parameter
 
@@ -53,7 +55,7 @@ class GeneticAlgorithmParameters:
         - individual
         - population
         - evaluate
-        - amte
+        - mate
         - mutate
         - select
         """
@@ -164,17 +166,32 @@ class GeneticAlgorithmViewer:
 
         return fig
 
-    def parallel_coordinates(self: GeneticAlgorithmViewer):
-        """TODO(Jules): Let the user select the number of individual to print."""
+    def parallel_coordinates(self: GeneticAlgorithmViewer, nhead: int | None = None, **kwargs: dict) -> Figure:
+        """
+        Print the `nhead` best individuals in the hall_of_fame as a parallel coordinates plot.
+
+        TODO(Jules): Ajouter un slider pour modifier le nombre d'éléments sélectionnés.
+        """
+        colorbar_colors = [
+            [0, "rgba(255,0,0,0)"],
+            [0.6, "rgba(200,0,0,0.5)"],
+            [1, "rgba(0, 128, 0, 1)"],
+        ]
+
         hof_fitness = self.hall_of_fame
-        hof_fitness["fitness"] = hof_fitness["fitness"] / hof_fitness["fitness"].max()
+        # hof_fitness["fitness"] = hof_fitness["fitness"] / hof_fitness["fitness"].max()
+        hof_fitness = hof_fitness.sort_values("fitness")
+        if nhead is not None:
+            hof_fitness = hof_fitness.head(nhead)
         fig = px.parallel_coordinates(
             hof_fitness,
             color="fitness",
             dimensions=self.parameters_names,
             labels=self.parameters_names,
-            color_continuous_scale=[[0, "rgb(255,0,0,0.5)"], [0.6, "rgb(200,0,0,0.5)"], [1, "green"]],
-            title="BATS parameters optimization",
+            # ajoute une couleur en fonction de la fitness du rouge transparent au vert
+            color_continuous_scale=kwargs.pop("color_continuous_scale", colorbar_colors),
+            title=kwargs.pop("title", "Parameters optimization"),
+            **kwargs,
         )
 
         fig.update_layout(coloraxis_colorbar={"title": "Fitness"})

@@ -6,12 +6,14 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
-from seapopym.configuration.no_transport.parameter import FunctionalGroups
+from seapopym.configuration.no_transport.configuration import NoTransportConfiguration
+from seapopym.configuration.no_transport.parameter import ForcingParameters, FunctionalGroups, NoTransportParameters
 from seapopym.configuration.parameters.parameter_functional_group import (
     FunctionalGroupUnit,
     FunctionalGroupUnitMigratoryParameters,
     FunctionalGroupUnitRelationParameters,
 )
+from seapopym.model.no_transport_model import NoTransportModel
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -101,3 +103,20 @@ class FunctionalGroupGeneratorNoTransport:
             ]
 
         return FunctionalGroups(functional_groups=fgroups)
+
+
+# TODO(Jules) : Est-ce qu'on peut envelopper cette foncitonnalité ? Comme un wrapper de classe qui retourne un model
+# Seapopym.
+def model_generator_no_transport(
+    forcing_parameters: ForcingParameters, fg_parameters: FunctionalGroupGeneratorNoTransport, **kwargs: dict
+) -> NoTransportModel:
+    """Generate a NoTransportModel object with the given parameters."""
+    return NoTransportModel(
+        configuration=NoTransportConfiguration(
+            parameters=NoTransportParameters(
+                forcing_parameters=forcing_parameters,
+                functional_groups_parameters=fg_parameters.generate(),
+                **kwargs,
+            )
+        )
+    )

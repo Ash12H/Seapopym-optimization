@@ -18,7 +18,7 @@ from seapopym.configuration.no_transport.configuration import NoTransportConfigu
 from seapopym.configuration.no_transport.parameter import ForcingParameters, NoTransportParameters
 from seapopym.model.no_transport_model import NoTransportModel
 
-from seapopym_optimization.wrapper import FunctionalGroupGeneratorNoTransport
+from seapopym_optimization.wrapper import FunctionalGroupGeneratorNoTransport, model_generator_no_transport
 
 BIOMASS_UNITS = "kg/m2"
 MAXIMUM_INIT_TRY = 1000
@@ -184,6 +184,10 @@ class GenericFunctionalGroupOptimize(ABC):
 class FunctionalGroupOptimizeNoTransport(GenericFunctionalGroupOptimize):
     """The parameters of a functional group as they are defined in the SeapoPym NoTransport model."""
 
+    # TODO(Jules) : On utilise un nom unique donc il serait très intéressant de pouvoir utiliser le même paramètre pour
+    # plusieurs groupes fonctionnels si ceux-ci ont les mêmes noms. Exemple : ALL_GROUP_tr_max utilisé par tous les
+    # groupes pour réduire la compléxité de l'optimisation.
+
     tr_max: float | Parameter
     tr_rate: float | Parameter
     inv_lambda_max: float | Parameter
@@ -342,15 +346,7 @@ class NoTransportCostFunction(GenericCostFunction):
         day_layers = args[:, self.NO_TRANSPORT_DAY_LAYER_POS].flatten()
         night_layers = args[:, self.NO_TRANSPORT_NIGHT_LAYER_POS].flatten()
 
-        model = NoTransportModel(
-            configuration=NoTransportConfiguration(
-                parameters=NoTransportParameters(
-                    forcing_parameters=forcing_parameters,
-                    functional_groups_parameters=fg_parameters.generate(),
-                    **kwargs,
-                )
-            )
-        )
+        model = model_generator_no_transport(forcing_parameters, fg_parameters, **kwargs)
 
         model.run()
 
