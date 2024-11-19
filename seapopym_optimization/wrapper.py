@@ -28,15 +28,21 @@ class FunctionalGroupGeneratorNoTransport:
     Parameters
     ----------
     parameters : np.ndarray
-        Axes: (functional_group, parameter). The parameters order is : tr_max, tr_rate, inv_lambda_max, inv_lambda_rate,
-        day_layer, night_layer, energy_transfert.
+        Axes: (functional_group, parameter). The parameters order is :
+        - tr_max
+        - tr_rate
+        - inv_lambda_max
+        - inv_lambda_rate
+        - day_layer
+        - night_layer
+        - energy_transfert
 
     """
 
     parameters: np.ndarray
     """
     Axes: (functional_group, parameter). The parameters order is : tr_max, tr_rate, inv_lambda_max, inv_lambda_rate,
-    day_layer, night_layer, energy_transfert
+    day_layer, night_layer, energy_transfert.
     """
     groups_name: list[str] = None
 
@@ -105,7 +111,7 @@ class FunctionalGroupGeneratorNoTransport:
         return FunctionalGroups(functional_groups=fgroups)
 
 
-# TODO(Jules) : Est-ce qu'on peut envelopper cette foncitonnalité ? Comme un wrapper de classe qui retourne un model
+# TODO(Jules) : Est-ce qu'on peut envelopper cette fonctionnalité ? Comme un wrapper de classe qui retourne un model
 # Seapopym.
 def model_generator_no_transport(
     forcing_parameters: ForcingParameters, fg_parameters: FunctionalGroupGeneratorNoTransport, **kwargs: dict

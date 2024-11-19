@@ -1,0 +1,9 @@
+{
+    "_ARRAY_DIMENSIONS": [
+        "latitude",
+        "longitude",
+        "time",
+        "depth"
+    ],
+    "units": "degree_Celsius"
+}
