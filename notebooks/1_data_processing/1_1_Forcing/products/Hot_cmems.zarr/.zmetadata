@@ -163,7 +163,12 @@
         "latitude/.zattrs": {
             "_ARRAY_DIMENSIONS": [
                 "latitude"
-            ]
+            ],
+            "axis": "Y",
+            "standard_name": "latitude",
+            "units": "degrees_north",
+            "valid_max": 23.249998092651367,
+            "valid_min": 22.333332061767578
         },
         "longitude/.zarray": {
             "chunks": [
@@ -188,7 +193,12 @@
         "longitude/.zattrs": {
             "_ARRAY_DIMENSIONS": [
                 "longitude"
-            ]
+            ],
+            "axis": "X",
+            "standard_name": "longitude",
+            "units": "degrees_east",
+            "valid_max": -157.5,
+            "valid_min": -158.5
         },
         "mnkc_epi/.zarray": {
             "chunks": [
