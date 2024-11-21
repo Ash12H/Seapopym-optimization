@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import random
-from abc import ABC, abstractmethod, abstractproperty
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import partial
 from typing import Callable, Iterable, Sequence
@@ -14,13 +14,11 @@ import numpy as np
 import pint
 import pint_xarray
 import xarray as xr
-from seapopym.configuration.no_transport.configuration import NoTransportConfiguration
-from seapopym.configuration.no_transport.parameter import ForcingParameters, NoTransportParameters
-from seapopym.model.no_transport_model import NoTransportModel
+from seapopym.configuration.no_transport.parameter import ForcingParameters
 
 from seapopym_optimization.wrapper import FunctionalGroupGeneratorNoTransport, model_generator_no_transport
 
-BIOMASS_UNITS = "kg/m2"
+BIOMASS_UNITS = "g/m2"
 MAXIMUM_INIT_TRY = 1000
 
 

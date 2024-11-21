@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Callable, Sequence
 import numpy as np
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from deap import algorithms, base, tools
 from plotly.subplots import make_subplots
 
@@ -121,9 +122,7 @@ class GeneticAlgorithmViewer:
     """
 
     _parameters: Sequence[Parameter]
-    _population: Sequence[Sequence[float]]
-    _logbook: tools.Logbook
-    _hall_of_fame: tools.HallOfFame
+    _logbook: pd.DataFrame
 
     @property
     def parameters_names(self: GeneticAlgorithmViewer):
@@ -140,61 +139,117 @@ class GeneticAlgorithmViewer:
     @property
     def logbook(self: GeneticAlgorithmViewer) -> pd.DataFrame:
         """A review of the generations stats."""
-        return pd.DataFrame(self._logbook)
+        return self._logbook.copy()
 
     @property
     def hall_of_fame(self: GeneticAlgorithmViewer) -> pd.DataFrame:
         """The best individuals and their fitness."""
-        hof = pd.DataFrame(self._hall_of_fame, columns=self.parameters_names)
-        hof["fitness"] = [ind.fitness.values[0] for ind in self._hall_of_fame]
-        return hof[np.isfinite(hof["fitness"])]
+        return self.logbook[np.isfinite(self.logbook["fitness"])].sort_values("fitness", ascending=True)
 
-    def box_plot(self: GeneticAlgorithmViewer, columns_number: int):
+    def fitness_evolution(self: GeneticAlgorithmViewer, log_y: bool = True) -> Figure:
+        data = self.logbook[np.isfinite(self.logbook["fitness"])]["fitness"].droplevel(1).reset_index()
+        figure = px.box(data_frame=data, x="generation", y="fitness", points=False, log_y=log_y)
+
+        median_values = data.groupby("generation").median().reset_index()
+        figure.add_scatter(
+            x=median_values["generation"],
+            y=median_values["fitness"],
+            mode="lines",
+            line={"color": "rgba(0,0,0,0.5)", "width": 2, "dash": "dash"},
+            name="Median",
+        )
+
+        min_values = data.groupby("generation").min().reset_index()
+        figure.add_scatter(
+            x=min_values["generation"],
+            y=min_values["fitness"],
+            mode="lines",
+            line={"color": "rgba(0,0,0,0.5)", "width": 2, "dash": "dash"},
+            name="Minimum",
+        )
+
+        figure.update_layout(title_text="Fitness evolution")
+        return figure
+
+    def box_plot(self: GeneticAlgorithmViewer, columns_number: int, nbest: int | None = None):
         nb_fig = len(self.parameters_names)
         nb_row = nb_fig // columns_number + (1 if nb_fig % columns_number > 0 else 0)
 
-        fig = make_subplots(rows=nb_row, cols=columns_number, subplot_titles=self.parameters_names)
+        fig = make_subplots(
+            rows=nb_row,
+            cols=columns_number,
+            subplot_titles=self.parameters_names,
+            horizontal_spacing=0.1,
+            vertical_spacing=0.1,
+        )
 
-        for i, (a, b, c) in enumerate(
+        if nbest is None:
+            nbest = len(self.hall_of_fame)
+
+        for i, (pname, lbound, ubound) in enumerate(
             zip(self.parameters_names, self.parameters_lower_bounds, self.parameters_upper_bound)
         ):
             fig.add_trace(
-                px.box(data_frame=self.hall_of_fame, y=a, range_y=(b, c), title=a).data[0],
+                px.box(
+                    data_frame=self.hall_of_fame[:nbest],
+                    y=pname,
+                    range_y=[lbound, ubound],  # Not working with "add_trace" function.
+                    title=pname,
+                ).data[0],
                 row=(i // columns_number) + 1,
                 col=(i % columns_number) + 1,
             )
 
+        fig.update_layout(
+            title_text="Parameters distribution",
+            height=nb_row * 300,
+            width=columns_number * 300,
+        )
+
         return fig
 
-    def parallel_coordinates(self: GeneticAlgorithmViewer, nhead: int | None = None, **kwargs: dict) -> Figure:
+    def parallel_coordinates(
+        self: GeneticAlgorithmViewer, nbest: int | None = None, colorscale: list | str = None
+    ) -> Figure:
         """
         Print the `nhead` best individuals in the hall_of_fame as a parallel coordinates plot.
 
         TODO(Jules): Ajouter un slider pour modifier le nombre d'éléments sélectionnés.
         """
-        colorbar_colors = [
-            [0, "rgba(255,0,0,0)"],
-            [0.6, "rgba(200,0,0,0.5)"],
-            [1, "rgba(0, 128, 0, 1)"],
-        ]
+        # TODO(Jules): Changer le sens du fitness (low = best)
+        if colorscale is None:
+            colorscale = [
+                [0, "rgba(255,0,0,0)"],
+                [0.6, "rgba(200,0,0,0.5)"],
+                [1, "rgba(0, 128, 0, 1)"],
+            ]
 
         hof_fitness = self.hall_of_fame
-        # hof_fitness["fitness"] = hof_fitness["fitness"] / hof_fitness["fitness"].max()
-        hof_fitness = hof_fitness.sort_values("fitness")
-        if nhead is not None:
-            hof_fitness = hof_fitness.head(nhead)
-        fig = px.parallel_coordinates(
-            hof_fitness,
-            color="fitness",
-            dimensions=self.parameters_names,
-            labels=self.parameters_names,
-            # ajoute une couleur en fonction de la fitness du rouge transparent au vert
-            color_continuous_scale=kwargs.pop("color_continuous_scale", colorbar_colors),
-            title=kwargs.pop("title", "Parameters optimization"),
-            **kwargs,
+        if nbest is not None:
+            hof_fitness = hof_fitness.head(nbest)
+
+        dimensions = [
+            {
+                "range": [self.parameters_lower_bounds[i], self.parameters_upper_bound[i]],
+                "label": self.parameters_names[i],
+                "values": hof_fitness[self.parameters_names[i]],
+            }
+            for i in range(len(self.parameters_names))
+        ]
+
+        fig = go.Figure(
+            data=go.Parcoords(
+                line={
+                    "color": hof_fitness["fitness"],
+                    "colorscale": colorscale,
+                    "showscale": True,
+                    "colorbar": {"title": "Fitness"},
+                },
+                dimensions=dimensions,
+            )
         )
 
-        fig.update_layout(coloraxis_colorbar={"title": "Fitness"})
+        fig.update_layout(coloraxis_colorbar={"title": "Fitness"}, title_text="Parameters optimization")
         return fig
 
 
@@ -218,7 +273,7 @@ class GeneticAlgorithm:
             parameter_optimize += fg.get_parameters_to_optimize()
         return parameter_optimize
 
-    def _helper_core_manage_inf(self: GeneticAlgorithm, func: Callable) -> Callable:
+    def _helper_core_manage_inf(self: GeneticAlgorithm, func: Callable, *args, **kwargs) -> Callable:
         """Transforme the function to manage np.inf values returned by the constraints."""
 
         def wrapper(arg):
@@ -227,36 +282,14 @@ class GeneticAlgorithm:
             if np.sum(valide) == 0:
                 return np.nan
             arg = arg[valide]
-            return func(arg)
+            return func(arg, *args, **kwargs)
 
         return wrapper
-
-    def _helper_core_initialize_viewer_containt(
-        self: GeneticAlgorithm,
-    ) -> tuple[tools.HallOfFame, tools.Logbook, tools.Statistics]:
-        """Initialize all the structures needed by the `viewer`."""
-        halloffame = tools.HallOfFame(self.parameter_genetic_algorithm.hall_of_fame_size)
-
-        stats = tools.Statistics(lambda ind: ind.fitness.values)
-        stats.register("avg", self._helper_core_manage_inf(np.nanmean))
-        stats.register("std", self._helper_core_manage_inf(np.nanstd))
-        stats.register("min", self._helper_core_manage_inf(np.nanmin))
-        stats.register("max", self._helper_core_manage_inf(np.nanmax))
-        stats.register("nvalide", lambda x: np.isfinite(x).sum())
-        stats.register("ninvalide", lambda x: (~np.isfinite(x)).sum())
-
-        logbook = tools.Logbook()
-        logbook.header = ["gen", "nevals"] + (stats.fields if stats else [])
-
-        return halloffame, logbook, stats
 
     def _helper_core_evaluate(
         self: GeneticAlgorithm,
         toolbox: base.Toolbox,
         individuals: Sequence,
-        logbook: tools.Logbook,
-        halloffame: tools.HallOfFame,
-        stats: tools.Statistics,
         generation: int,
     ) -> tuple[tools.Logbook, tools.HallOfFame]:
         """Evaluate the cost function and update the statistiques."""
@@ -270,13 +303,12 @@ class GeneticAlgorithm:
         for ind, fit in zip(invalid_ind, fitnesses):
             ind.fitness.values = fit
 
-        if halloffame is not None:
-            halloffame.update(individuals)
-
-        record = stats.compile(individuals) if stats else {}
-        logbook.record(gen=generation, nevals=len(invalid_ind), **record)
-
-        return logbook, halloffame
+        df_logbook = pd.DataFrame(individuals, columns=[param.name for param in self.parameter_optimize])
+        df_logbook["fitness"] = [ind.fitness.values[0] for ind in individuals]
+        df_logbook["generation"] = generation
+        df_logbook.index.name = "individual"
+        df_logbook = df_logbook.reset_index()
+        return df_logbook.set_index(["generation", "individual"])
 
     def _core(
         self: GeneticAlgorithm, toolbox: base.Toolbox
@@ -285,11 +317,9 @@ class GeneticAlgorithm:
         The core function as it is described in the DEAP documentation. It is adapted to allow Dask client for
         parallel computing.
         """
-        halloffame, logbook, stats = self._helper_core_initialize_viewer_containt()
-
         population = toolbox.population(n=self.parameter_genetic_algorithm.POP_SIZE)
 
-        logbook, halloffame = self._helper_core_evaluate(toolbox, population, logbook, halloffame, stats, generation=0)
+        df_logbook = self._helper_core_evaluate(toolbox, population, generation=0)
 
         for gen in range(1, self.parameter_genetic_algorithm.NGEN + 1):
             offspring = toolbox.select(population, len(population))
@@ -298,11 +328,11 @@ class GeneticAlgorithm:
                 offspring, toolbox, self.parameter_genetic_algorithm.CXPB, self.parameter_genetic_algorithm.MUTPB
             )  # MUTATE + MATE
 
-            logbook, halloffame = self._helper_core_evaluate(toolbox, offspring, logbook, halloffame, stats, gen)
+            df_logbook = pd.concat([df_logbook, self._helper_core_evaluate(toolbox, offspring, gen)])
 
             population[:] = offspring
 
-        return population, logbook, halloffame
+        return df_logbook
 
     def optimize(self: GeneticAlgorithm) -> GeneticAlgorithmViewer:
         """This is the main function. Use it to optimize your model."""
@@ -311,4 +341,4 @@ class GeneticAlgorithm:
         for constraint in self.constraint:
             toolbox.decorate("evaluate", constraint.generate(ordered_names))
         result = self._core(toolbox)
-        return GeneticAlgorithmViewer(self.parameter_optimize, *result)
+        return GeneticAlgorithmViewer(self.parameter_optimize, result)

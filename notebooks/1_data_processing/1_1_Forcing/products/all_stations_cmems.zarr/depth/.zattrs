@@ -1,0 +1,13 @@
+{
+    "_ARRAY_DIMENSIONS": [
+        "depth"
+    ],
+    "axis": "Z",
+    "comment": "In fact units are pelagic layer number; 1: epipelagic layer; 2: upper mesopelagic layer; 3: lower mesopelagic layer",
+    "long_name": "Depth",
+    "positive": "down",
+    "standard_name": "depth",
+    "units": "m",
+    "valid_max": 3,
+    "valid_min": 1
+}
