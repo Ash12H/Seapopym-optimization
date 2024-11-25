@@ -26,18 +26,44 @@ class GeneticAlgorithmParameters:
     The structure used to store the genetic algorithm parameters. Can generate the toolbox with default
     parameters.
 
-    # TODO(Jules): Describe the parameters
+    Parameters
+    ----------
+    MUTPB: float
+        Represents the probability of mutating an individual. It is recommended to use a value between 0.001 and 0.1.
+    ETA: float
+        Crowding degree of the mutation. A high eta will produce a mutant resembling its parent, while a small eta will
+        produce a solution much more different. It is recommended to use a value between 1 and 20.
+    INDPB: float
+        Represents the individual probability of mutation for each attribute of the individual. It is recommended to use
+        a value between 0.0 and 0.1. If you have a lot of parameters, you can use a 1/len(parameters) value.
+    CXPB: float
+        Represents the probability of mating two individuals. It is recommended to use a value between 0.5 and 1.0.
+    NGEN: int
+        Represents the number of generations.
+    POP_SIZE: int
+        Represents the size of the population.
+    cost_function_weight: tuple | float = (-1.0,)
+        The weight of the cost function. The default value is (-1.0,) to minimize the cost function.
 
     """
 
     ETA: float
+    """
+    Crowding degree of the mutation. A high eta will produce a mutant resembling its parent, while a small eta will
+    produce a solution much more different.
+    """
     INDPB: float
+    """Represents the individual probability of mutation for each attribute of the individual."""
     CXPB: float
+    """Represents the probability of mating two individuals."""
     MUTPB: float
+    """Represents the probability of mutating an individual."""
     NGEN: int
+    """Represents the number of generations."""
     POP_SIZE: int
+    """Represents the size of the population."""
     cost_function_weight: tuple | float = (-1.0,)
-    hall_of_fame_size: int = 100
+    """The weight of the cost function. The default value is (-1.0,) to minimize the cost function."""
 
     # TODO(Jules): Add default parameters for : mate method, mutate method, select method
 
@@ -219,9 +245,9 @@ class GeneticAlgorithmViewer:
         # TODO(Jules): Changer le sens du fitness (low = best)
         if colorscale is None:
             colorscale = [
-                [0, "rgba(255,0,0,0)"],
-                [0.6, "rgba(200,0,0,0.5)"],
-                [1, "rgba(0, 128, 0, 1)"],
+                [0, "rgba(220, 80, 80, 0.8)"],
+                [0.5, "rgba(255,200,0,0.5)"],
+                [1, "rgba(255,200,150,0.2)"],
             ]
 
         hof_fitness = self.hall_of_fame
@@ -243,13 +269,16 @@ class GeneticAlgorithmViewer:
                     "color": hof_fitness["fitness"],
                     "colorscale": colorscale,
                     "showscale": True,
-                    "colorbar": {"title": "Fitness"},
+                    "colorbar": {"title": "Cost function score"},
                 },
                 dimensions=dimensions,
             )
         )
 
-        fig.update_layout(coloraxis_colorbar={"title": "Fitness"}, title_text="Parameters optimization")
+        fig.update_layout(
+            coloraxis_colorbar={"title": "Fitness"},
+            title_text="Parameters optimization : minimization of the cost function",
+        )
         return fig
 
 
