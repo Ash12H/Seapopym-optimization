@@ -106,26 +106,6 @@ class GeneticAlgorithmParameters:
             return Individual([param.init_method(param.lower_bound, param.upper_bound) for param in parameters])
 
         toolbox.register("population", tools.initRepeat, list, individual)
-
-        # ----------------------------------------------------------
-
-        # NOTE(Jules): WITH CREATOR -----------------------------
-
-        # creator.create("Fitness", base.Fitness, weights=self.cost_function_weight)
-        # creator.create("Individual", list, fitness=creator.Fitness)
-        # for param in parameters:
-        #     toolbox.register(param.name, param.init_method, param.lower_bound, param.upper_bound)
-
-        # toolbox.register(
-        #     "individual",
-        #     tools.initCycle,
-        #     creator.Individual,
-        #     tuple(toolbox.__dict__[param.name] for param in parameters),
-        # )
-        # toolbox.register("population", tools.initRepeat, list, toolbox.individual)
-
-        # ----------------------------------------------------------
-
         toolbox.register("evaluate", cost_function.generate())
         toolbox.register("mate", tools.cxTwoPoint)
         toolbox.register(
@@ -137,6 +117,8 @@ class GeneticAlgorithmParameters:
             up=[param.upper_bound for param in parameters],
         )
         toolbox.register("select", tools.selTournament, tournsize=3)
+        # NOTE(Jules): La nouvelle population peut contenir des individus en plusieurs exemplaires là où d'autres
+        # individus peuvent être absents.
         return toolbox
 
 
@@ -163,6 +145,16 @@ class GeneticAlgorithmViewer:
         return [fg.upper_bound for fg in self._parameters]
 
     @property
+    def stats(self: GeneticAlgorithmViewer) -> pd.DataFrame:
+        """A review of the generations stats."""
+        stats = self.logbook[np.isfinite(self.logbook["fitness"])]
+        return (
+            stats.groupby("generation")["fitness"]
+            .aggregate(["mean", "std", "min", "max", "count"])
+            .rename(columns={"count": "valid"})
+        )
+
+    @property
     def logbook(self: GeneticAlgorithmViewer) -> pd.DataFrame:
         """A review of the generations stats."""
         return self._logbook.copy()
@@ -170,7 +162,12 @@ class GeneticAlgorithmViewer:
     @property
     def hall_of_fame(self: GeneticAlgorithmViewer) -> pd.DataFrame:
         """The best individuals and their fitness."""
-        return self.logbook[np.isfinite(self.logbook["fitness"])].sort_values("fitness", ascending=True)
+        logbook = self.logbook
+        condition_not_inf = np.isfinite(logbook["fitness"])
+        condition_not_already_calculated = ~logbook.index.get_level_values("previous_generation")
+        condition = condition_not_inf & condition_not_already_calculated
+        previous_generation_level = 1
+        return logbook[condition].sort_values("fitness", ascending=True).droplevel(previous_generation_level)
 
     def fitness_evolution(self: GeneticAlgorithmViewer, log_y: bool = True) -> Figure:
         data = self.logbook[np.isfinite(self.logbook["fitness"])]["fitness"].droplevel(1).reset_index()
@@ -285,6 +282,11 @@ class GeneticAlgorithmViewer:
 # TODO(Jules): Use Param library rather than dataclass ?
 @dataclass
 class GeneticAlgorithm:
+    """
+    Contains the genetic algorithm parameters and thA quoi correspondent e cost function to optimize. By default, the order of
+    of the process is SCM: Select, Cross, Mutate.
+    """
+
     parameter_genetic_algorithm: GeneticAlgorithmParameters
     cost_function: GenericCostFunction
     client: Client | None = None
@@ -322,29 +324,30 @@ class GeneticAlgorithm:
         generation: int,
     ) -> tuple[tools.Logbook, tools.HallOfFame]:
         """Evaluate the cost function and update the statistiques."""
+        known = [ind.fitness.valid for ind in individuals]
         invalid_ind = [ind for ind in individuals if not ind.fitness.valid]
         if self.client is None:
             fitnesses = list(map(toolbox.evaluate, invalid_ind))
         else:
             futures_results = self.client.map(toolbox.evaluate, invalid_ind)
             fitnesses = self.client.gather(futures_results)
-
         for ind, fit in zip(invalid_ind, fitnesses):
             ind.fitness.values = fit
 
         df_logbook = pd.DataFrame(individuals, columns=[param.name for param in self.parameter_optimize])
         df_logbook["fitness"] = [ind.fitness.values[0] for ind in individuals]
+        df_logbook["previous_generation"] = known
         df_logbook["generation"] = generation
         df_logbook.index.name = "individual"
         df_logbook = df_logbook.reset_index()
-        return df_logbook.set_index(["generation", "individual"])
+        return df_logbook.set_index(["generation", "previous_generation", "individual"]).sort_index()
 
     def _core(
         self: GeneticAlgorithm, toolbox: base.Toolbox
     ) -> tuple[Sequence[Sequence[float]], tools.Logbook, tools.HallOfFame]:
         """
         The core function as it is described in the DEAP documentation. It is adapted to allow Dask client for
-        parallel computing.
+        parallel computing. The order used is SCM: Select, Cross, Mutate.
         """
         population = toolbox.population(n=self.parameter_genetic_algorithm.POP_SIZE)
 
@@ -352,12 +355,16 @@ class GeneticAlgorithm:
 
         for gen in range(1, self.parameter_genetic_algorithm.NGEN + 1):
             offspring = toolbox.select(population, len(population))
-
             offspring = algorithms.varAnd(
                 offspring, toolbox, self.parameter_genetic_algorithm.CXPB, self.parameter_genetic_algorithm.MUTPB
             )  # MUTATE + MATE
 
             df_logbook = pd.concat([df_logbook, self._helper_core_evaluate(toolbox, offspring, gen)])
+
+            # TODO(Jules): L'intégralité de la population est remplacée par les nouveaux individus. Je pourrai ajouter
+            # paramètre GGAP pour conserver les meilleurs individus de la génération précédente.
+            # Cf. Maria Angelova and Tania Pencheva 2011 - Tuning Genetic Algorithm Parameters to Improve Convergence
+            # Time
 
             population[:] = offspring
 
