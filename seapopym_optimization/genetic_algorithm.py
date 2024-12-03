@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Sequence
+from typing import TYPE_CHECKING, Callable, Sequence, Optional
 
 import numpy as np
 import pandas as pd
@@ -148,11 +148,16 @@ class GeneticAlgorithmViewer:
     def stats(self: GeneticAlgorithmViewer) -> pd.DataFrame:
         """A review of the generations stats."""
         stats = self.logbook[np.isfinite(self.logbook["fitness"])]
-        return (
+        generation_gap = (
+            stats.reset_index().groupby("generation")["previous_generation"].agg(lambda x: np.sum(x) / len(x))
+        )
+        stats = (
             stats.groupby("generation")["fitness"]
             .aggregate(["mean", "std", "min", "max", "count"])
             .rename(columns={"count": "valid"})
         )
+        stats["generation_gap"] = generation_gap
+        return stats
 
     @property
     def logbook(self: GeneticAlgorithmViewer) -> pd.DataFrame:
@@ -170,7 +175,7 @@ class GeneticAlgorithmViewer:
         return logbook[condition].sort_values("fitness", ascending=True).droplevel(previous_generation_level)
 
     def fitness_evolution(self: GeneticAlgorithmViewer, log_y: bool = True) -> Figure:
-        data = self.logbook[np.isfinite(self.logbook["fitness"])]["fitness"].droplevel(1).reset_index()
+        data = self.logbook[np.isfinite(self.logbook["fitness"])]["fitness"].reset_index()
         figure = px.box(data_frame=data, x="generation", y="fitness", points=False, log_y=log_y)
 
         median_values = data.groupby("generation").median().reset_index()
@@ -232,24 +237,23 @@ class GeneticAlgorithmViewer:
         return fig
 
     def parallel_coordinates(
-        self: GeneticAlgorithmViewer, nbest: int | None = None, colorscale: list | str = None
+        self: GeneticAlgorithmViewer,
+        nbest: int | None = None,
+        colorscale: list | str | None = None,
+        unselected_opacity: float = 0.2,
     ) -> Figure:
-        """
-        Print the `nhead` best individuals in the hall_of_fame as a parallel coordinates plot.
-
-        TODO(Jules): Ajouter un slider pour modifier le nombre d'éléments sélectionnés.
-        """
-        # TODO(Jules): Changer le sens du fitness (low = best)
+        """Print the `nhead` best individuals in the hall_of_fame as a parallel coordinates plot."""
         if colorscale is None:
             colorscale = [
-                [0, "rgba(220, 80, 80, 0.8)"],
-                [0.5, "rgba(255,200,0,0.5)"],
-                [1, "rgba(255,200,150,0.2)"],
+                [0, "rgba(0, 0, 255, 0.8)"],
+                [0.3, "rgba(255,255,0,0.5)"],
+                [1.0, "rgba(255,255,0,0.0)"],
             ]
 
         hof_fitness = self.hall_of_fame
+
         if nbest is not None:
-            hof_fitness = hof_fitness.head(nbest)
+            hof_fitness = hof_fitness.iloc[:nbest]
 
         dimensions = [
             {
@@ -260,15 +264,27 @@ class GeneticAlgorithmViewer:
             for i in range(len(self.parameters_names))
         ]
 
+        # NOTE(Jules): We reversed the values because Plotly set the individuals with the maximum value at the front.
+        # As we minimize the function, we want the individuals with the minimum value at the front for a better
+        # visualization.
         fig = go.Figure(
             data=go.Parcoords(
                 line={
-                    "color": hof_fitness["fitness"],
+                    "color": -hof_fitness["fitness"],
                     "colorscale": colorscale,
                     "showscale": True,
-                    "colorbar": {"title": "Cost function score"},
+                    "colorbar": {
+                        "title": "Cost function score",
+                        "tickvals": [-hof_fitness["fitness"].min(), -hof_fitness["fitness"].max()],
+                        "tickmode": "array",
+                        "ticktext": [hof_fitness["fitness"].min(), hof_fitness["fitness"].max()],
+                    },
+                    "reversescale": True,
                 },
                 dimensions=dimensions,
+                unselected={
+                    "line": {"opacity": unselected_opacity},
+                },
             )
         )
 
