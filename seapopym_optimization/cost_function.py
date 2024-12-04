@@ -2,21 +2,28 @@
 
 from __future__ import annotations
 
-import random
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import partial
-from typing import Callable, Iterable, Sequence
+from typing import TYPE_CHECKING, Callable, Iterable, Sequence
 
 import cf_xarray
-import cf_xarray.units
+import cf_xarray.units  # noqa: F401
 import numpy as np
-import pint
-import pint_xarray
+import pint  # noqa: F401
+import pint_xarray  # noqa: F401
 import xarray as xr
-from seapopym.configuration.no_transport.parameter import ForcingParameters
 
-from seapopym_optimization.wrapper import FunctionalGroupGeneratorNoTransport, model_generator_no_transport
+from seapopym_optimization.functional_groups import AllGroups, FunctionalGroupOptimizeNoTransport
+from seapopym_optimization.wrapper import (
+    NO_TRANSPORT_DAY_LAYER_POS,
+    NO_TRANSPORT_NIGHT_LAYER_POS,
+    FunctionalGroupGeneratorNoTransport,
+    model_generator_no_transport,
+)
+
+if TYPE_CHECKING:
+    from seapopym.configuration.no_transport.parameter import ForcingParameters
 
 BIOMASS_UNITS = "g/m2"
 MAXIMUM_INIT_TRY = 1000
@@ -126,7 +133,7 @@ class GenericCostFunction(ABC):
 
     """
 
-    functional_groups: Sequence[GenericFunctionalGroupOptimize]
+    functional_groups: Sequence[FunctionalGroupOptimizeNoTransport]
     forcing_parameters: ForcingParameters
     observations: Sequence[Observation]
 
@@ -139,8 +146,6 @@ class GenericCostFunction(ABC):
     def _cost_function(
         self: GenericCostFunction,
         args: np.ndarray,
-        groups_name: Sequence[str],
-        fixed_parameters: np.ndarray,
         forcing_parameters: ForcingParameters,
         observations: Sequence[Observation],
         **kwargs: dict,
@@ -153,12 +158,8 @@ class GenericCostFunction(ABC):
 
     def generate(self: GenericCostFunction) -> Callable[[Iterable[float]], tuple]:
         """Generate the partial cost function used for optimization."""
-        groups_name = tuple(fg.name for fg in self.functional_groups)
-        fixed_parameters = np.asarray(tuple(fg.as_tuple() for fg in self.functional_groups))
         return partial(
             self._cost_function,
-            groups_name=groups_name,
-            fixed_parameters=fixed_parameters,
             forcing_parameters=self.forcing_parameters,
             observations=self.observations,
         )
@@ -183,57 +184,31 @@ class NoTransportCostFunction(GenericCostFunction):
     kwargs: dict | None = None
     # TODO(Jules): Replace kwargs by the NoTransport configuration structure -> Env and Kernel
 
-    NO_TRANSPORT_DAY_LAYER_POS = 4
-    NO_TRANSPORT_NIGHT_LAYER_POS = 5
-
-    def __post_init__(self: NoTransportCostFunction):
+    def __post_init__(self: NoTransportCostFunction) -> None:
+        """Check that the kwargs are set."""
         if self.kwargs is None:
             self.kwargs = {}
 
     @property
     def parameters_name(self: NoTransportCostFunction) -> Sequence[str]:
-        names = []
-        for fg in self.functional_groups:
-            names += [param.name for param in fg.get_parameters_to_optimize()]
-        return names
-
-    def _fill_args(self: NoTransportCostFunction, args: np.ndarray, fixed_parameters: np.ndarray) -> np.ndarray:
-        """
-        Fill the fixed parameters in the args. Used to get all the parameters needed for the simulation.
-
-        Parameters
-        ----------
-        args : np.ndarray
-            Parameters to optimize. This array must be flattened.
-        fixed_parameters : np.ndarray
-            Fixed parameters. This array must have the shape (nb_functional_groups, nb_parameters).
-
-        Returns
-        -------
-        np.ndarray
-            An array that contains all the parameters needed for the simulation. The shape is the same as the
-            fixed_parameters array.
-
-        """
-        initial_shape = fixed_parameters.shape
-        args = np.asarray(args, dtype=float)
-        args_flat = fixed_parameters.flatten()
-        args_flat[np.isnan(args_flat)] = args
-        return args_flat.reshape(initial_shape)
+        """Return the ordered list of parameters name."""
+        # NOTE(Jules): AllGroups is instantiated 2 times. This is not optimal.
+        return AllGroups(self.functional_groups).get_all_parameters_names_ordered()
 
     def _cost_function(
         self: NoTransportCostFunction,
         args: np.ndarray,
-        groups_name: Sequence[str],
-        fixed_parameters: np.ndarray,
         forcing_parameters: ForcingParameters,
         observations: Sequence[Observation],
         **kwargs: dict,
     ) -> tuple:
-        args = self._fill_args(args, fixed_parameters)
-        fg_parameters = FunctionalGroupGeneratorNoTransport(args, groups_name)
-        day_layers = args[:, self.NO_TRANSPORT_DAY_LAYER_POS].flatten()
-        night_layers = args[:, self.NO_TRANSPORT_NIGHT_LAYER_POS].flatten()
+        all_groups = AllGroups(self.functional_groups)
+        filled_args = all_groups.generate_matrix(args)
+        groups_name = all_groups.groups_name
+        day_layers = filled_args[:, NO_TRANSPORT_DAY_LAYER_POS].flatten()
+        night_layers = filled_args[:, NO_TRANSPORT_NIGHT_LAYER_POS].flatten()
+
+        fg_parameters = FunctionalGroupGeneratorNoTransport(filled_args, groups_name)
 
         model = model_generator_no_transport(forcing_parameters, fg_parameters, **kwargs)
 

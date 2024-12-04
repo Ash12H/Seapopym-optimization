@@ -18,6 +18,9 @@ from seapopym.model.no_transport_model import NoTransportModel
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+NO_TRANSPORT_DAY_LAYER_POS = 1
+NO_TRANSPORT_NIGHT_LAYER_POS = 2
+
 
 @dataclass
 class FunctionalGroupGeneratorNoTransport:
@@ -29,20 +32,20 @@ class FunctionalGroupGeneratorNoTransport:
     ----------
     parameters : np.ndarray
         Axes: (functional_group >=1, parameter == 7). The parameters order is :
+        - day_layer
+        - night_layer
+        - energy_transfert
         - tr_max
         - tr_rate
         - inv_lambda_max
         - inv_lambda_rate
-        - day_layer
-        - night_layer
-        - energy_transfert
 
     """
 
     parameters: np.ndarray
     """
-    Axes: (functional_group, parameter). The parameters order is : tr_max, tr_rate, inv_lambda_max, inv_lambda_rate,
-    day_layer, night_layer, energy_transfert.
+    Axes: (functional_group, parameter). The parameters order is : day_layer, night_layer, energy_transfert, tr_max,
+    tr_rate, inv_lambda_max, inv_lambda_rate.
     """
     groups_name: list[str] = None
 
@@ -55,8 +58,8 @@ class FunctionalGroupGeneratorNoTransport:
             raise ValueError(msg)
         if self.parameters.shape[1] != 7:
             msg = (
-                "The number of parameters must be 7 : tr_max, tr_rate, inv_lambda_max, inv_lambda_rate, day_layer, "
-                "night_layer, energy_transfert",
+                "The number of parameters must be 7 : day_layer, night_layer, energy_transfert, tr_max, tr_rate,"
+                "inv_lambda_max, inv_lambda_rate.",
             )
             raise ValueError(msg)
 
@@ -72,13 +75,13 @@ class FunctionalGroupGeneratorNoTransport:
         fg_name: str,
     ) -> FunctionalGroupUnit:
         """Create a single functional group with the given parameters."""
-        tr_max: float = fg_parameters[0]
-        tr_rate: float = fg_parameters[1]
-        inv_lambda_max: float = fg_parameters[2]
-        inv_lambda_rate: float = fg_parameters[3]
-        day_layer: float = fg_parameters[4]
-        night_layer: float = fg_parameters[5]
-        energy_transfert: float = fg_parameters[6]
+        day_layer: float = fg_parameters[NO_TRANSPORT_DAY_LAYER_POS]
+        night_layer: float = fg_parameters[NO_TRANSPORT_NIGHT_LAYER_POS]
+        energy_transfert: float = fg_parameters[2]
+        tr_max: float = fg_parameters[3]
+        tr_rate: float = fg_parameters[4]
+        inv_lambda_max: float = fg_parameters[5]
+        inv_lambda_rate: float = fg_parameters[6]
 
         return FunctionalGroupUnit(
             name=fg_name,

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from itertools import chain
 import random
-from abc import ABC, abstractmethod
+from abc import ABC
 from dataclasses import dataclass, fields
+from itertools import chain
 from typing import Callable, Sequence
 
 import numpy as np
@@ -70,6 +70,7 @@ class GenericFunctionalGroupOptimize(ABC):
         Return the parameters representing the functional group.
         Order of declaration is the same as in the cost_function.
         """
+        excluded = ("name",)
         return tuple(getattr(self, field.name) for field in fields(self) if field.name not in excluded)
 
     def get_fixed_parameters(self: GenericFunctionalGroupOptimize, *, fill_with_name: float = True) -> tuple:
@@ -91,6 +92,7 @@ class GenericFunctionalGroupOptimize(ABC):
 class FunctionalGroupOptimizeNoTransport(GenericFunctionalGroupOptimize):
     """The parameters of a functional group as they are defined in the SeapoPym NoTransport model."""
 
+    # NOTE(Jules): Be sure that you respect the order of the parameters as defined in the wrapper module.
     day_layer: float | Parameter
     night_layer: float | Parameter
     energy_coefficient: float | Parameter
@@ -102,19 +104,29 @@ class FunctionalGroupOptimizeNoTransport(GenericFunctionalGroupOptimize):
 
 @dataclass
 class AllGroups:
+    """The structure used to generate the matrix of all parameters for all functional groups."""
+
     functional_groups: Sequence[GenericFunctionalGroupOptimize]
 
-    def get_all_names_ordered(self: AllGroups) -> Sequence[str]:
+    @property
+    def groups_name(self: AllGroups) -> Sequence[str]:
+        """Return the ordered list of the functional groups name."""
+        return tuple(group.name for group in self.functional)
+
+    def get_all_parameters_names_ordered(self: AllGroups) -> Sequence[str]:
+        """Return the ordered list of all unique parameters name."""
         all_param = tuple(chain.from_iterable(group.get_parameters_to_optimize() for group in self.functional_groups))
         all_names = tuple({param.name for param in all_param})
         # Remove duplicates and keep order
         return list(dict.fromkeys(all_names))
 
     def replace_strings_with_values(data_tuple, mapping_dict):
+        """Replace all strings in a tuple with their corresponding values in a dictionary."""
         return tuple(mapping_dict.get(item, item) if isinstance(item, str) else item for item in data_tuple)
 
-    def generate_all_groups(self: AllGroups, x: Sequence[float]) -> np.ndarray:
-        keys = self.get_all_names_ordered()
+    def generate_matrix(self: AllGroups, x: Sequence[float]) -> np.ndarray:
+        """Generate the matrix of all parameters for all functional groups. This can be used to generate the model."""
+        keys = self.get_all_parameters_names_ordered()
         parameters_values = dict(zip(keys, x))
         all_param = tuple(
             chain.from_iterable(group.get_fixed_parameters(fill_with_name=True) for group in self.functional_groups)
