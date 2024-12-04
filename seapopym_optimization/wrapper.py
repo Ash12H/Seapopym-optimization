@@ -23,12 +23,12 @@ if TYPE_CHECKING:
 class FunctionalGroupGeneratorNoTransport:
     """
     This class is a wrapper around the SeapoPym model to automatically create functional groups with the given
-    parameters.
+    parameters. The parameters must be given as a 2D array with the shape (functional_group >=1, parameter == 7).
 
     Parameters
     ----------
     parameters : np.ndarray
-        Axes: (functional_group, parameter). The parameters order is :
+        Axes: (functional_group >=1, parameter == 7). The parameters order is :
         - tr_max
         - tr_rate
         - inv_lambda_max
