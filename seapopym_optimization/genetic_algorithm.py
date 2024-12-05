@@ -312,14 +312,6 @@ class GeneticAlgorithm:
         """Check parameters."""
         # TODO(Jules): Vérifier que les paramètres ont des noms uniques.
 
-    @property
-    def parameter_optimize(self: GeneticAlgorithm) -> Sequence[Parameter]:
-        """The list of the parameters to optimize."""
-        parameter_optimize = []
-        for fg in self.cost_function.functional_groups:
-            parameter_optimize += fg.get_parameters_to_optimize()
-        return parameter_optimize
-
     def _helper_core_manage_inf(self: GeneticAlgorithm, func: Callable, *args, **kwargs) -> Callable:
         """Transforme the function to manage np.inf values returned by the constraints."""
 
@@ -342,6 +334,7 @@ class GeneticAlgorithm:
         """Evaluate the cost function and update the statistiques."""
         known = [ind.fitness.valid for ind in individuals]
         invalid_ind = [ind for ind in individuals if not ind.fitness.valid]
+        print(f"########## {invalid_ind}")
         if self.client is None:
             fitnesses = list(map(toolbox.evaluate, invalid_ind))
         else:
@@ -350,7 +343,9 @@ class GeneticAlgorithm:
         for ind, fit in zip(invalid_ind, fitnesses):
             ind.fitness.values = fit
 
-        df_logbook = pd.DataFrame(individuals, columns=[param.name for param in self.parameter_optimize])
+        df_logbook = pd.DataFrame(
+            individuals, columns=self.cost_function.functional_groups.unique_functional_groups_parameters_ordered.keys()
+        )
         df_logbook["fitness"] = [ind.fitness.values[0] for ind in individuals]
         df_logbook["previous_generation"] = known
         df_logbook["generation"] = generation
@@ -388,9 +383,11 @@ class GeneticAlgorithm:
 
     def optimize(self: GeneticAlgorithm) -> GeneticAlgorithmViewer:
         """This is the main function. Use it to optimize your model."""
-        toolbox = self.parameter_genetic_algorithm.generate_toolbox(self.parameter_optimize, self.cost_function)
-        ordered_names = self.cost_function.parameters_name
+        ordered_parameters = self.cost_function.functional_groups.unique_functional_groups_parameters_ordered
+        toolbox = self.parameter_genetic_algorithm.generate_toolbox(ordered_parameters.values(), self.cost_function)
         for constraint in self.constraint:
-            toolbox.decorate("evaluate", constraint.generate(ordered_names))
+            toolbox.decorate("evaluate", constraint.generate(list(ordered_parameters.keys())))
         result = self._core(toolbox)
-        return GeneticAlgorithmViewer(self.parameter_optimize, result)
+        return GeneticAlgorithmViewer(
+            self.cost_function.functional_groups.unique_functional_groups_parameters_ordered.values(), result
+        )

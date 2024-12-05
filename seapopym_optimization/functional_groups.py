@@ -109,27 +109,30 @@ class AllGroups:
     functional_groups: Sequence[GenericFunctionalGroupOptimize]
 
     @property
-    def groups_name(self: AllGroups) -> Sequence[str]:
+    def functional_groups_name(self: AllGroups) -> Sequence[str]:
         """Return the ordered list of the functional groups name."""
-        return tuple(group.name for group in self.functional)
+        return tuple(group.name for group in self.functional_groups)
 
-    def get_all_parameters_names_ordered(self: AllGroups) -> Sequence[str]:
-        """Return the ordered list of all unique parameters name."""
+    @property
+    def unique_functional_groups_parameters_ordered(self: AllGroups) -> dict[str, Parameter]:
+        """Return the unique parameters of all functional groups in the order of declaration."""
         all_param = tuple(chain.from_iterable(group.get_parameters_to_optimize() for group in self.functional_groups))
-        all_names = tuple({param.name for param in all_param})
-        # Remove duplicates and keep order
-        return list(dict.fromkeys(all_names))
+        unique_params = {}
+        for param in all_param:
+            if param.name not in unique_params:
+                unique_params[param.name] = param
+        return unique_params
 
-    def replace_strings_with_values(data_tuple, mapping_dict):
+    def _replace_strings_with_values(self: AllGroups, data_tuple: tuple, mapping_dict: dict[str, float]) -> tuple:
         """Replace all strings in a tuple with their corresponding values in a dictionary."""
         return tuple(mapping_dict.get(item, item) if isinstance(item, str) else item for item in data_tuple)
 
     def generate_matrix(self: AllGroups, x: Sequence[float]) -> np.ndarray:
         """Generate the matrix of all parameters for all functional groups. This can be used to generate the model."""
-        keys = self.get_all_parameters_names_ordered()
+        keys = self.unique_functional_groups_parameters_ordered.keys()
         parameters_values = dict(zip(keys, x))
         all_param = tuple(
             chain.from_iterable(group.get_fixed_parameters(fill_with_name=True) for group in self.functional_groups)
         )
-        all_param = self.replace_strings_with_values(all_param, parameters_values)
+        all_param = self._replace_strings_with_values(all_param, parameters_values)
         return np.array(all_param).reshape(len(self.functional_groups), -1)

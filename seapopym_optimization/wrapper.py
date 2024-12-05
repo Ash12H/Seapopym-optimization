@@ -18,8 +18,8 @@ from seapopym.model.no_transport_model import NoTransportModel
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-NO_TRANSPORT_DAY_LAYER_POS = 1
-NO_TRANSPORT_NIGHT_LAYER_POS = 2
+NO_TRANSPORT_DAY_LAYER_POS = 0
+NO_TRANSPORT_NIGHT_LAYER_POS = 1
 
 
 @dataclass

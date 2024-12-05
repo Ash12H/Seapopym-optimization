@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import partial
 from typing import TYPE_CHECKING, Callable, Iterable, Sequence
 
@@ -133,14 +133,14 @@ class GenericCostFunction(ABC):
 
     """
 
-    functional_groups: Sequence[FunctionalGroupOptimizeNoTransport]
+    functional_groups: Sequence[FunctionalGroupOptimizeNoTransport] | AllGroups
     forcing_parameters: ForcingParameters
     observations: Sequence[Observation]
 
-    @property
-    @abstractmethod
-    def parameters_name(self: GenericCostFunction) -> Sequence[str]:
-        """Return the ordered list of parameters name."""
+    def __post_init__(self: GenericCostFunction) -> None:
+        """Check that the kwargs are set."""
+        if not isinstance(self.functional_groups, AllGroups):
+            self.functional_groups = AllGroups(self.functional_groups)
 
     @abstractmethod
     def _cost_function(
@@ -186,14 +186,9 @@ class NoTransportCostFunction(GenericCostFunction):
 
     def __post_init__(self: NoTransportCostFunction) -> None:
         """Check that the kwargs are set."""
+        super().__post_init__()
         if self.kwargs is None:
             self.kwargs = {}
-
-    @property
-    def parameters_name(self: NoTransportCostFunction) -> Sequence[str]:
-        """Return the ordered list of parameters name."""
-        # NOTE(Jules): AllGroups is instantiated 2 times. This is not optimal.
-        return AllGroups(self.functional_groups).get_all_parameters_names_ordered()
 
     def _cost_function(
         self: NoTransportCostFunction,
@@ -202,9 +197,8 @@ class NoTransportCostFunction(GenericCostFunction):
         observations: Sequence[Observation],
         **kwargs: dict,
     ) -> tuple:
-        all_groups = AllGroups(self.functional_groups)
-        filled_args = all_groups.generate_matrix(args)
-        groups_name = all_groups.groups_name
+        groups_name = self.functional_groups.functional_groups_name
+        filled_args = self.functional_groups.generate_matrix(args)
         day_layers = filled_args[:, NO_TRANSPORT_DAY_LAYER_POS].flatten()
         night_layers = filled_args[:, NO_TRANSPORT_NIGHT_LAYER_POS].flatten()
 
