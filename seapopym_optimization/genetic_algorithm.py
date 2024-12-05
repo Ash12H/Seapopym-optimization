@@ -156,7 +156,7 @@ class GeneticAlgorithmViewer:
             .aggregate(["mean", "std", "min", "max", "count"])
             .rename(columns={"count": "valid"})
         )
-        stats["generation_gap"] = generation_gap
+        stats["from_previous_generation"] = generation_gap
         return stats
 
     @property
