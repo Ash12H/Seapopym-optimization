@@ -10,6 +10,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from deap import algorithms, base, tools
+from IPython.display import clear_output, display
 from plotly.subplots import make_subplots
 
 if TYPE_CHECKING:
@@ -18,6 +19,19 @@ if TYPE_CHECKING:
 
     from seapopym_optimization.constraint import GenericConstraint
     from seapopym_optimization.cost_function import GenericCostFunction, Parameter
+
+
+def _compute_stats(logbook: pd.DataFrame) -> pd.DataFrame:
+    """Compute the statistics of the generations."""
+    stats = logbook[np.isfinite(logbook["fitness"])]
+    generation_gap = stats.reset_index().groupby("generation")["previous_generation"].agg(lambda x: np.sum(x) / len(x))
+    stats = (
+        stats.groupby("generation")["fitness"]
+        .aggregate(["mean", "std", "min", "max", "count"])
+        .rename(columns={"count": "valid"})
+    )
+    stats["from_previous_generation"] = generation_gap
+    return stats
 
 
 @dataclass
@@ -147,17 +161,7 @@ class GeneticAlgorithmViewer:
     @property
     def stats(self: GeneticAlgorithmViewer) -> pd.DataFrame:
         """A review of the generations stats."""
-        stats = self.logbook[np.isfinite(self.logbook["fitness"])]
-        generation_gap = (
-            stats.reset_index().groupby("generation")["previous_generation"].agg(lambda x: np.sum(x) / len(x))
-        )
-        stats = (
-            stats.groupby("generation")["fitness"]
-            .aggregate(["mean", "std", "min", "max", "count"])
-            .rename(columns={"count": "valid"})
-        )
-        stats["from_previous_generation"] = generation_gap
-        return stats
+        return _compute_stats(self.logbook)
 
     @property
     def logbook(self: GeneticAlgorithmViewer) -> pd.DataFrame:
@@ -334,7 +338,6 @@ class GeneticAlgorithm:
         """Evaluate the cost function and update the statistiques."""
         known = [ind.fitness.valid for ind in individuals]
         invalid_ind = [ind for ind in individuals if not ind.fitness.valid]
-        print(f"########## {invalid_ind}")
         if self.client is None:
             fitnesses = list(map(toolbox.evaluate, invalid_ind))
         else:
@@ -364,6 +367,8 @@ class GeneticAlgorithm:
 
         df_logbook = self._helper_core_evaluate(toolbox, population, generation=0)
 
+        display(_compute_stats(df_logbook))
+
         for gen in range(1, self.parameter_genetic_algorithm.NGEN + 1):
             offspring = toolbox.select(population, len(population))
             offspring = algorithms.varAnd(
@@ -378,6 +383,8 @@ class GeneticAlgorithm:
             # Time
 
             population[:] = offspring
+            clear_output(wait=True)
+            display(_compute_stats(df_logbook))
 
         return df_logbook
 
