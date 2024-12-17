@@ -1,0 +1,15 @@
+{
+    "_ARRAY_DIMENSIONS": [
+        "layer"
+    ],
+    "axis": "Z",
+    "desc": "The layer depth according to Seapodym definition",
+    "flag_meanings": "epipelagic, upper-mesopelagic, lower-mesopelagic",
+    "flag_values": [
+        0,
+        1,
+        2
+    ],
+    "long_name": "Layer depth",
+    "standard_name": "layer"
+}
