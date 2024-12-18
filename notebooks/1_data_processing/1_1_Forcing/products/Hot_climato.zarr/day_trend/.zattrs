@@ -1,0 +1,10 @@
+{
+    "_ARRAY_DIMENSIONS": [
+        "time",
+        "latitude",
+        "longitude",
+        "layer"
+    ],
+    "long_name": "Day Trend",
+    "units": "mg/m3"
+}
