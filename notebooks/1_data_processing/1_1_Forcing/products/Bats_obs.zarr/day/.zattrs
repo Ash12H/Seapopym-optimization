@@ -5,6 +5,6 @@
         "longitude",
         "layer"
     ],
-    "description": "Zooplankton dry weight by cube meter of sea water during the day",
+    "description": "Zooplankton carbon weight by cube meter of sea water during the day",
     "units": "mg/m3"
 }
