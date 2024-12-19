@@ -23,6 +23,9 @@ salib = "^1.5.0"
 pytest = "^8.3.3"
 
 
+[tool.poetry.group.extra.dependencies]
+statsmodels = "^0.14.4"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
