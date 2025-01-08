@@ -40,42 +40,6 @@
             "description": "Zooplankton carbon weight by cube meter of sea water during the day",
             "units": "mg/m3"
         },
-        "day_trend/.zarray": {
-            "chunks": [
-                1489,
-                1,
-                1,
-                1
-            ],
-            "compressor": {
-                "blocksize": 0,
-                "clevel": 5,
-                "cname": "lz4",
-                "id": "blosc",
-                "shuffle": 1
-            },
-            "dtype": "<f8",
-            "fill_value": "NaN",
-            "filters": null,
-            "order": "C",
-            "shape": [
-                1489,
-                1,
-                1,
-                1
-            ],
-            "zarr_format": 2
-        },
-        "day_trend/.zattrs": {
-            "_ARRAY_DIMENSIONS": [
-                "time",
-                "latitude",
-                "longitude",
-                "layer"
-            ],
-            "long_name": "Day Trend",
-            "units": "mg/m3"
-        },
         "latitude/.zarray": {
             "chunks": [
                 1
@@ -203,42 +167,6 @@
                 "layer"
             ],
             "description": "Zooplankton carbon weight by cube meter of sea water at night",
-            "units": "mg/m3"
-        },
-        "night_trend/.zarray": {
-            "chunks": [
-                1489,
-                1,
-                1,
-                1
-            ],
-            "compressor": {
-                "blocksize": 0,
-                "clevel": 5,
-                "cname": "lz4",
-                "id": "blosc",
-                "shuffle": 1
-            },
-            "dtype": "<f8",
-            "fill_value": "NaN",
-            "filters": null,
-            "order": "C",
-            "shape": [
-                1489,
-                1,
-                1,
-                1
-            ],
-            "zarr_format": 2
-        },
-        "night_trend/.zattrs": {
-            "_ARRAY_DIMENSIONS": [
-                "time",
-                "latitude",
-                "longitude",
-                "layer"
-            ],
-            "long_name": "Night Trend",
             "units": "mg/m3"
         },
         "time/.zarray": {
