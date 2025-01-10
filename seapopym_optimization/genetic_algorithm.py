@@ -12,6 +12,7 @@ import plotly.graph_objects as go
 from deap import algorithms, base, tools
 from IPython.display import clear_output, display
 from plotly.subplots import make_subplots
+from tqdm import tqdm
 
 if TYPE_CHECKING:
     from dask.distributed import Client
@@ -363,26 +364,25 @@ class GeneticAlgorithm:
         The core function as it is described in the DEAP documentation. It is adapted to allow Dask client for
         parallel computing. The order used is SCM: Select, Cross, Mutate.
         """
-        population = toolbox.population(n=self.parameter_genetic_algorithm.POP_SIZE)
+        for gen in tqdm(desc="Generations", iterable=range(self.parameter_genetic_algorithm.NGEN + 1)):
+            if gen == 0:
+                population = toolbox.population(n=self.parameter_genetic_algorithm.POP_SIZE)
 
-        df_logbook = self._helper_core_evaluate(toolbox, population, generation=0)
+                df_logbook = self._helper_core_evaluate(toolbox, population, gen)
+            else:
+                offspring = toolbox.select(population, len(population))
+                offspring = algorithms.varAnd(
+                    offspring, toolbox, self.parameter_genetic_algorithm.CXPB, self.parameter_genetic_algorithm.MUTPB
+                )  # MUTATE + MATE
 
-        display(_compute_stats(df_logbook))
+                df_logbook = pd.concat([df_logbook, self._helper_core_evaluate(toolbox, offspring, gen)])
 
-        for gen in range(1, self.parameter_genetic_algorithm.NGEN + 1):
-            offspring = toolbox.select(population, len(population))
-            offspring = algorithms.varAnd(
-                offspring, toolbox, self.parameter_genetic_algorithm.CXPB, self.parameter_genetic_algorithm.MUTPB
-            )  # MUTATE + MATE
+                # TODO(Jules): L'intégralité de la population est remplacée par les nouveaux individus. Je pourrai ajouter
+                # paramètre GGAP pour conserver les meilleurs individus de la génération précédente.
+                # Cf. Maria Angelova and Tania Pencheva 2011 - Tuning Genetic Algorithm Parameters to Improve Convergence
+                # Time
 
-            df_logbook = pd.concat([df_logbook, self._helper_core_evaluate(toolbox, offspring, gen)])
-
-            # TODO(Jules): L'intégralité de la population est remplacée par les nouveaux individus. Je pourrai ajouter
-            # paramètre GGAP pour conserver les meilleurs individus de la génération précédente.
-            # Cf. Maria Angelova and Tania Pencheva 2011 - Tuning Genetic Algorithm Parameters to Improve Convergence
-            # Time
-
-            population[:] = offspring
+                population[:] = offspring
             clear_output(wait=True)
             display(_compute_stats(df_logbook))
 
