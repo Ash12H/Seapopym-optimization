@@ -364,7 +364,7 @@ class GeneticAlgorithm:
         The core function as it is described in the DEAP documentation. It is adapted to allow Dask client for
         parallel computing. The order used is SCM: Select, Cross, Mutate.
         """
-        for gen in tqdm(desc="Generations", iterable=range(self.parameter_genetic_algorithm.NGEN + 1)):
+        for gen in tqdm(desc="Generations", iterable=range(self.parameter_genetic_algorithm.NGEN)):
             if gen == 0:
                 population = toolbox.population(n=self.parameter_genetic_algorithm.POP_SIZE)
 
@@ -392,8 +392,9 @@ class GeneticAlgorithm:
         """This is the main function. Use it to optimize your model."""
         ordered_parameters = self.cost_function.functional_groups.unique_functional_groups_parameters_ordered
         toolbox = self.parameter_genetic_algorithm.generate_toolbox(ordered_parameters.values(), self.cost_function)
-        for constraint in self.constraint:
-            toolbox.decorate("evaluate", constraint.generate(list(ordered_parameters.keys())))
+        if self.constraint is not None:
+            for constraint in self.constraint:
+                toolbox.decorate("evaluate", constraint.generate(list(ordered_parameters.keys())))
         result = self._core(toolbox)
         return GeneticAlgorithmViewer(
             self.cost_function.functional_groups.unique_functional_groups_parameters_ordered.values(), result

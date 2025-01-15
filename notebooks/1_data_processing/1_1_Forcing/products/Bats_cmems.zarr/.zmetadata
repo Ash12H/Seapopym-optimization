@@ -1,6 +1,13 @@
 {
     "metadata": {
-        ".zattrs": {},
+        ".zattrs": {
+            "Conventions": "CF-1.7",
+            "history": "Created on 2024-10-17",
+            "institution": "CLS",
+            "references": "http://www.cls.fr; http://www.seapodym.eu",
+            "source": "SEAPODYM-LMTL 3.0.0",
+            "title": "Global ocean low and mid trophic levels biomass content hindcast"
+        },
         ".zgroup": {
             "zarr_format": 2
         },
@@ -37,6 +44,7 @@
                 "time",
                 "depth"
             ],
+            "standard_name": "sea_water_potential_temperature_vertical_mean_over_pelagic_layer",
             "units": "degree_Celsius"
         },
         "U/.zarray": {
@@ -71,7 +79,9 @@
                 "longitude",
                 "time",
                 "depth"
-            ]
+            ],
+            "standard_name": "eastward_sea_water_velocity_vertical_mean_over_pelagic_layer",
+            "units": "m/s"
         },
         "V/.zarray": {
             "chunks": [
@@ -105,7 +115,9 @@
                 "longitude",
                 "time",
                 "depth"
-            ]
+            ],
+            "standard_name": "northward_sea_water_velocity_vertical_mean_over_pelagic_layer",
+            "units": "m/s"
         },
         "depth/.zarray": {
             "chunks": [
@@ -118,7 +130,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<i4",
+            "dtype": "<i8",
             "fill_value": null,
             "filters": null,
             "order": "C",
@@ -132,13 +144,11 @@
                 "depth"
             ],
             "axis": "Z",
-            "comment": "In fact units are pelagic layer number; 1: epipelagic layer; 2: upper mesopelagic layer; 3: lower mesopelagic layer",
-            "long_name": "Depth",
-            "positive": "down",
-            "standard_name": "depth",
-            "units": "m",
-            "valid_max": 3,
-            "valid_min": 1
+            "desc": "The layer depth according to Seapodym definition",
+            "flag_meanings": "epipelagic, upper-mesopelagic, lower-mesopelagic",
+            "flag_values": "[0 1 2]",
+            "long_name": "Layer depth",
+            "standard_name": "depth"
         },
         "latitude/.zarray": {
             "chunks": [
@@ -166,9 +176,7 @@
             ],
             "axis": "Y",
             "standard_name": "latitude",
-            "units": "degrees_north",
-            "valid_max": 32.08333206176758,
-            "valid_min": 31.166664123535156
+            "units": "degrees_north"
         },
         "longitude/.zarray": {
             "chunks": [
@@ -196,9 +204,7 @@
             ],
             "axis": "X",
             "standard_name": "longitude",
-            "units": "degrees_east",
-            "valid_max": -63.75,
-            "valid_min": -64.66666412353516
+            "units": "degrees_east"
         },
         "mnkc_epi/.zarray": {
             "chunks": [
@@ -229,7 +235,12 @@
                 "latitude",
                 "longitude",
                 "time"
-            ]
+            ],
+            "carbon_to_wet_weight_conversion_factor": 11.9,
+            "day_layer": "epipelagic (1)",
+            "night_layer": "epipelagic (1)",
+            "standard_name": "mass_content_of_epipelagic_micronekton_expressed_as_wet_weight_in_sea_water",
+            "units": "g m-2"
         },
         "mnkc_hmlmeso/.zarray": {
             "chunks": [
@@ -260,7 +271,12 @@
                 "latitude",
                 "longitude",
                 "time"
-            ]
+            ],
+            "carbon_to_wet_weight_conversion_factor": 11.9,
+            "day_layer": "lower mesopelagic (3)",
+            "night_layer": "epipelagic (1)",
+            "standard_name": "mass_content_of_highly_migrant_lower_mesopelagic_micronekton_expressed_as_wet_weight_in_sea_water",
+            "units": "g m-2"
         },
         "mnkc_lmeso/.zarray": {
             "chunks": [
@@ -291,7 +307,12 @@
                 "latitude",
                 "longitude",
                 "time"
-            ]
+            ],
+            "carbon_to_wet_weight_conversion_factor": 11.9,
+            "day_layer": "lower mesopelagic (3)",
+            "night_layer": "lower mesopelagic (3)",
+            "standard_name": "mass_content_of_lower_mesopelagic_micronekton_expressed_as_wet_weight_in_sea_water",
+            "units": "g m-2"
         },
         "mnkc_mlmeso/.zarray": {
             "chunks": [
@@ -322,7 +343,12 @@
                 "latitude",
                 "longitude",
                 "time"
-            ]
+            ],
+            "carbon_to_wet_weight_conversion_factor": 11.9,
+            "day_layer": "lower mesopelagic (3)",
+            "night_layer": "upper mesopelagic (2)",
+            "standard_name": "mass_content_of_migrant_lower_mesopelagic_micronekton_expressed_as_wet_weight_in_sea_water",
+            "units": "g m-2"
         },
         "mnkc_mumeso/.zarray": {
             "chunks": [
@@ -353,7 +379,12 @@
                 "latitude",
                 "longitude",
                 "time"
-            ]
+            ],
+            "carbon_to_wet_weight_conversion_factor": 11.9,
+            "day_layer": "upper mesopelagic (2)",
+            "night_layer": "epipelagic (1)",
+            "standard_name": "mass_content_of_migrant_upper_mesopelagic_micronekton_expressed_as_wet_weight_in_sea_water",
+            "units": "g m-2"
         },
         "mnkc_umeso/.zarray": {
             "chunks": [
@@ -384,7 +415,12 @@
                 "latitude",
                 "longitude",
                 "time"
-            ]
+            ],
+            "carbon_to_wet_weight_conversion_factor": 11.9,
+            "day_layer": "upper mesopelagic (2)",
+            "night_layer": "upper mesopelagic (2)",
+            "standard_name": "mass_content_of_upper_mesopelagic_micronekton_expressed_as_wet_weight_in_sea_water",
+            "units": "g m-2"
         },
         "npp/.zarray": {
             "chunks": [
@@ -415,7 +451,9 @@
                 "latitude",
                 "longitude",
                 "time"
-            ]
+            ],
+            "standard_name": "net_primary_productivity_of_biomass_expressed_as_carbon_in_sea_water",
+            "units": "mg m-2 day-1"
         },
         "pelagic_layer_depth/.zarray": {
             "chunks": [
@@ -449,11 +487,13 @@
                 "longitude",
                 "time",
                 "depth"
-            ]
+            ],
+            "standard_name": "sea_water_pelagic_layer_bottom_depth",
+            "units": "m"
         },
         "time/.zarray": {
             "chunks": [
-                8401
+                9496
             ],
             "compressor": {
                 "blocksize": 0,
@@ -475,10 +515,12 @@
             "_ARRAY_DIMENSIONS": [
                 "time"
             ],
+            "axis": "T",
             "calendar": "standard",
-            "units": "seconds since 1970-01-01",
-            "valid_max": 1672444800,
-            "valid_min": 883612800
+            "long_name": "Time",
+            "standard_name": "time",
+            "unit_long": "Seconds Since 1970-01-01",
+            "units": "seconds since 1970-01-01"
         },
         "zeu/.zarray": {
             "chunks": [
@@ -509,7 +551,9 @@
                 "latitude",
                 "longitude",
                 "time"
-            ]
+            ],
+            "standard_name": "euphotic_zone_depth",
+            "units": "m"
         },
         "zooc/.zarray": {
             "chunks": [
@@ -540,7 +584,9 @@
                 "latitude",
                 "longitude",
                 "time"
-            ]
+            ],
+            "standard_name": "mass_content_of_zooplankton_expressed_as_carbon_in_sea_water",
+            "units": "g m-2"
         }
     },
     "zarr_consolidated_format": 1

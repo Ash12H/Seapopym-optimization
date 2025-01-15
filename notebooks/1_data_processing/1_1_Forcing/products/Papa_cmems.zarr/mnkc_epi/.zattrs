@@ -3,5 +3,10 @@
         "latitude",
         "longitude",
         "time"
-    ]
+    ],
+    "carbon_to_wet_weight_conversion_factor": 11.9,
+    "day_layer": "epipelagic (1)",
+    "night_layer": "epipelagic (1)",
+    "standard_name": "mass_content_of_epipelagic_micronekton_expressed_as_wet_weight_in_sea_water",
+    "units": "g m-2"
 }

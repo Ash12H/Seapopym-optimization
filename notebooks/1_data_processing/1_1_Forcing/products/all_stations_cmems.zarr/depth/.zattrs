@@ -3,11 +3,9 @@
         "depth"
     ],
     "axis": "Z",
-    "comment": "In fact units are pelagic layer number; 1: epipelagic layer; 2: upper mesopelagic layer; 3: lower mesopelagic layer",
-    "long_name": "Depth",
-    "positive": "down",
-    "standard_name": "depth",
-    "units": "m",
-    "valid_max": 3,
-    "valid_min": 1
+    "desc": "The layer depth according to Seapodym definition",
+    "flag_meanings": "epipelagic, upper-mesopelagic, lower-mesopelagic",
+    "flag_values": "[0 1 2]",
+    "long_name": "Layer depth",
+    "standard_name": "depth"
 }

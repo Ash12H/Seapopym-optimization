@@ -4,7 +4,5 @@
     ],
     "axis": "X",
     "standard_name": "longitude",
-    "units": "degrees_east",
-    "valid_max": -149.5,
-    "valid_min": -150.5
+    "units": "degrees_east"
 }

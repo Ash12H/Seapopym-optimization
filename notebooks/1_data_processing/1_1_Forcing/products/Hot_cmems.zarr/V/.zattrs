@@ -4,5 +4,7 @@
         "longitude",
         "time",
         "depth"
-    ]
+    ],
+    "standard_name": "northward_sea_water_velocity_vertical_mean_over_pelagic_layer",
+    "units": "m/s"
 }

@@ -4,5 +4,7 @@
         "longitude",
         "time",
         "depth"
-    ]
+    ],
+    "standard_name": "sea_water_pelagic_layer_bottom_depth",
+    "units": "m"
 }

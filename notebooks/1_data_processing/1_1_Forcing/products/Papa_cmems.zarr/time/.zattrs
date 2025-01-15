@@ -2,8 +2,10 @@
     "_ARRAY_DIMENSIONS": [
         "time"
     ],
+    "axis": "T",
     "calendar": "standard",
-    "units": "seconds since 1970-01-01",
-    "valid_max": 1672444800,
-    "valid_min": 883612800
+    "long_name": "Time",
+    "standard_name": "time",
+    "unit_long": "Seconds Since 1970-01-01",
+    "units": "seconds since 1970-01-01"
 }

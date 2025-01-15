@@ -248,6 +248,22 @@ class ModTaylorDiagram(object):
     def close(self):
         plt.close(self.fig)
 
+    def get_stats(self):
+        data = {
+            "name": [],
+            "correlation_coefficient": [],
+            "normalized_standard_deviation": [],
+            "bias": [],
+            "normalized_root_mean_square_deviation": [],
+        }
+        for point in self.points:
+            data["name"].append(point.name)
+            data["correlation_coefficient"].append(point.corrcoef)
+            data["normalized_standard_deviation"].append(point.s_normd)
+            data["bias"].append(point.bias)
+            data["normalized_root_mean_square_deviation"].append(point.nrmsd)
+        return pd.DataFrame(data)
+
 
 ########################################################################################################################
 
