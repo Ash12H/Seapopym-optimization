@@ -1,0 +1,12 @@
+{
+    "_ARRAY_DIMENSIONS": [
+        "time",
+        "latitude",
+        "longitude"
+    ],
+    "description": "Lowess smoothed : L12 x ZEU",
+    "lowess_frac": 0.05,
+    "station": "hot",
+    "type": "in situ",
+    "units": "mg m-2 day-1"
+}
