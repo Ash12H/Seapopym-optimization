@@ -1,0 +1,163 @@
+{
+    "metadata": {
+        ".zattrs": {
+            "desc": "L12 multiplied by ZEU (from CMEMS)."
+        },
+        ".zgroup": {
+            "zarr_format": 2
+        },
+        "dayofyear/.zarray": {
+            "chunks": [
+                365
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<i8",
+            "fill_value": null,
+            "filters": null,
+            "order": "C",
+            "shape": [
+                365
+            ],
+            "zarr_format": 2
+        },
+        "dayofyear/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "dayofyear"
+            ],
+            "axis": "T"
+        },
+        "l12/.zarray": {
+            "chunks": [
+                365,
+                1,
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f8",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                365,
+                1,
+                1
+            ],
+            "zarr_format": 2
+        },
+        "l12/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "dayofyear",
+                "latitude",
+                "longitude"
+            ],
+            "desc": "L12 multiplied by ZEU (from CMEMS)",
+            "station": "hot",
+            "type": "in situ",
+            "units": "mg m-2 day-1"
+        },
+        "l12_lowess_0.05/.zarray": {
+            "chunks": [
+                365,
+                1,
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f8",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                365,
+                1,
+                1
+            ],
+            "zarr_format": 2
+        },
+        "l12_lowess_0.05/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "dayofyear",
+                "latitude",
+                "longitude"
+            ],
+            "desc": "L12 multiplied by ZEU (from CMEMS) with LOWESS filter using frac=0.05",
+            "station": "hot",
+            "type": "in situ",
+            "units": "mg m-2 day-1"
+        },
+        "latitude/.zarray": {
+            "chunks": [
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f8",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                1
+            ],
+            "zarr_format": 2
+        },
+        "latitude/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "latitude"
+            ],
+            "axis": "Y",
+            "long_name": "latitude",
+            "units": "degrees_north"
+        },
+        "longitude/.zarray": {
+            "chunks": [
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<i8",
+            "fill_value": null,
+            "filters": null,
+            "order": "C",
+            "shape": [
+                1
+            ],
+            "zarr_format": 2
+        },
+        "longitude/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "longitude"
+            ],
+            "axis": "X",
+            "long_name": "longitude",
+            "units": "degrees_east"
+        }
+    },
+    "zarr_consolidated_format": 1
+}
