@@ -1,3 +1,4 @@
 {
-    "desc": "L12 multiplied by ZEU (from CMEMS)."
+    "desc": "L12 multiplied by ZEU (from CMEMS).",
+    "type": "climatology"
 }

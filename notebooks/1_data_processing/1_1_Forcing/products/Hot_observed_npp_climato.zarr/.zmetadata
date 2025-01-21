@@ -1,40 +1,15 @@
 {
     "metadata": {
         ".zattrs": {
-            "desc": "L12 multiplied by ZEU (from CMEMS)."
+            "desc": "L12 multiplied by ZEU (from CMEMS).",
+            "type": "climatology"
         },
         ".zgroup": {
             "zarr_format": 2
         },
-        "dayofyear/.zarray": {
-            "chunks": [
-                365
-            ],
-            "compressor": {
-                "blocksize": 0,
-                "clevel": 5,
-                "cname": "lz4",
-                "id": "blosc",
-                "shuffle": 1
-            },
-            "dtype": "<i8",
-            "fill_value": null,
-            "filters": null,
-            "order": "C",
-            "shape": [
-                365
-            ],
-            "zarr_format": 2
-        },
-        "dayofyear/.zattrs": {
-            "_ARRAY_DIMENSIONS": [
-                "dayofyear"
-            ],
-            "axis": "T"
-        },
         "l12/.zarray": {
             "chunks": [
-                365,
+                1489,
                 1,
                 1
             ],
@@ -50,7 +25,7 @@
             "filters": null,
             "order": "C",
             "shape": [
-                365,
+                1489,
                 1,
                 1
             ],
@@ -58,7 +33,7 @@
         },
         "l12/.zattrs": {
             "_ARRAY_DIMENSIONS": [
-                "dayofyear",
+                "time",
                 "latitude",
                 "longitude"
             ],
@@ -69,7 +44,7 @@
         },
         "l12_lowess_0.05/.zarray": {
             "chunks": [
-                365,
+                1489,
                 1,
                 1
             ],
@@ -85,7 +60,7 @@
             "filters": null,
             "order": "C",
             "shape": [
-                365,
+                1489,
                 1,
                 1
             ],
@@ -93,14 +68,11 @@
         },
         "l12_lowess_0.05/.zattrs": {
             "_ARRAY_DIMENSIONS": [
-                "dayofyear",
+                "time",
                 "latitude",
                 "longitude"
             ],
-            "desc": "L12 multiplied by ZEU (from CMEMS) with LOWESS filter using frac=0.05",
-            "station": "hot",
-            "type": "in situ",
-            "units": "mg m-2 day-1"
+            "desc": "L12 multiplied by ZEU (from CMEMS) smoothed with lowess filter with frac=0.05."
         },
         "latitude/.zarray": {
             "chunks": [
@@ -157,6 +129,34 @@
             "axis": "X",
             "long_name": "longitude",
             "units": "degrees_east"
+        },
+        "time/.zarray": {
+            "chunks": [
+                1489
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<i8",
+            "fill_value": null,
+            "filters": null,
+            "order": "C",
+            "shape": [
+                1489
+            ],
+            "zarr_format": 2
+        },
+        "time/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time"
+            ],
+            "axis": "T",
+            "calendar": "proleptic_gregorian",
+            "units": "days since 1994-02-20 00:00:00"
         }
     },
     "zarr_consolidated_format": 1

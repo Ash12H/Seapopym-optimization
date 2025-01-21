@@ -1,11 +1,8 @@
 {
     "_ARRAY_DIMENSIONS": [
-        "dayofyear",
+        "time",
         "latitude",
         "longitude"
     ],
-    "desc": "L12 multiplied by ZEU (from CMEMS) with LOWESS filter using frac=0.05",
-    "station": "hot",
-    "type": "in situ",
-    "units": "mg m-2 day-1"
+    "desc": "L12 multiplied by ZEU (from CMEMS) smoothed with lowess filter with frac=0.05."
 }
