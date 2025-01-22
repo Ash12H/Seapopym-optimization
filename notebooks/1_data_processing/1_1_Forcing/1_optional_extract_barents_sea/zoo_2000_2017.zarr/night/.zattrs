@@ -1,0 +1,12 @@
+{
+    "_ARRAY_DIMENSIONS": [
+        "time",
+        "latitude",
+        "longitude",
+        "layer"
+    ],
+    "coef_dry_to_carbon": 0.4,
+    "long_name": "Zooplankton",
+    "type": "carbon",
+    "units": "g / m2"
+}
