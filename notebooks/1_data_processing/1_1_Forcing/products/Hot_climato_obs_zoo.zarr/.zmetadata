@@ -1,0 +1,416 @@
+{
+    "metadata": {
+        ".zattrs": {
+            "desc": "Aggregated and smoothed observations using lowess filtre."
+        },
+        ".zgroup": {
+            "zarr_format": 2
+        },
+        "day/.zarray": {
+            "chunks": [
+                1489,
+                1,
+                1,
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f8",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                1489,
+                1,
+                1,
+                1
+            ],
+            "zarr_format": 2
+        },
+        "day/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time",
+                "latitude",
+                "longitude",
+                "layer"
+            ],
+            "description": "Zooplankton carbon weight by cube meter of sea water during the day",
+            "units": "mg/m3"
+        },
+        "day_lowess_0.05/.zarray": {
+            "chunks": [
+                1489,
+                1,
+                1,
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f8",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                1489,
+                1,
+                1,
+                1
+            ],
+            "zarr_format": 2
+        },
+        "day_lowess_0.05/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time",
+                "latitude",
+                "longitude",
+                "layer"
+            ],
+            "units": "mg/m3"
+        },
+        "day_lowess_0.1/.zarray": {
+            "chunks": [
+                1489,
+                1,
+                1,
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f8",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                1489,
+                1,
+                1,
+                1
+            ],
+            "zarr_format": 2
+        },
+        "day_lowess_0.1/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time",
+                "latitude",
+                "longitude",
+                "layer"
+            ],
+            "units": "mg/m3"
+        },
+        "day_lowess_0.2/.zarray": {
+            "chunks": [
+                1489,
+                1,
+                1,
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f8",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                1489,
+                1,
+                1,
+                1
+            ],
+            "zarr_format": 2
+        },
+        "day_lowess_0.2/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time",
+                "latitude",
+                "longitude",
+                "layer"
+            ],
+            "units": "mg/m3"
+        },
+        "latitude/.zarray": {
+            "chunks": [
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f8",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                1
+            ],
+            "zarr_format": 2
+        },
+        "latitude/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "latitude"
+            ],
+            "axis": "Y",
+            "long_name": "Latitude",
+            "standard_name": "latitude",
+            "units": "degrees_north"
+        },
+        "layer/.zarray": {
+            "chunks": [
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<i8",
+            "fill_value": null,
+            "filters": null,
+            "order": "C",
+            "shape": [
+                1
+            ],
+            "zarr_format": 2
+        },
+        "layer/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "layer"
+            ],
+            "axis": "Z",
+            "desc": "The layer depth according to Seapodym definition",
+            "flag_meanings": "epipelagic, upper-mesopelagic, lower-mesopelagic",
+            "flag_values": [
+                0,
+                1,
+                2
+            ],
+            "long_name": "Layer depth",
+            "standard_name": "layer"
+        },
+        "longitude/.zarray": {
+            "chunks": [
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<i8",
+            "fill_value": null,
+            "filters": null,
+            "order": "C",
+            "shape": [
+                1
+            ],
+            "zarr_format": 2
+        },
+        "longitude/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "longitude"
+            ],
+            "axis": "X",
+            "long_name": "Longitude",
+            "standard_name": "longitude",
+            "units": "degrees_east"
+        },
+        "night/.zarray": {
+            "chunks": [
+                1489,
+                1,
+                1,
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f8",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                1489,
+                1,
+                1,
+                1
+            ],
+            "zarr_format": 2
+        },
+        "night/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time",
+                "latitude",
+                "longitude",
+                "layer"
+            ],
+            "description": "Zooplankton carbon weight by cube meter of sea water at night",
+            "units": "mg/m3"
+        },
+        "night_lowess_0.05/.zarray": {
+            "chunks": [
+                1489,
+                1,
+                1,
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f8",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                1489,
+                1,
+                1,
+                1
+            ],
+            "zarr_format": 2
+        },
+        "night_lowess_0.05/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time",
+                "latitude",
+                "longitude",
+                "layer"
+            ],
+            "units": "mg/m3"
+        },
+        "night_lowess_0.1/.zarray": {
+            "chunks": [
+                1489,
+                1,
+                1,
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f8",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                1489,
+                1,
+                1,
+                1
+            ],
+            "zarr_format": 2
+        },
+        "night_lowess_0.1/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time",
+                "latitude",
+                "longitude",
+                "layer"
+            ],
+            "units": "mg/m3"
+        },
+        "night_lowess_0.2/.zarray": {
+            "chunks": [
+                1489,
+                1,
+                1,
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f8",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                1489,
+                1,
+                1,
+                1
+            ],
+            "zarr_format": 2
+        },
+        "night_lowess_0.2/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time",
+                "latitude",
+                "longitude",
+                "layer"
+            ],
+            "units": "mg/m3"
+        },
+        "time/.zarray": {
+            "chunks": [
+                1489
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<i8",
+            "fill_value": null,
+            "filters": null,
+            "order": "C",
+            "shape": [
+                1489
+            ],
+            "zarr_format": 2
+        },
+        "time/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time"
+            ],
+            "axis": "T",
+            "calendar": "proleptic_gregorian",
+            "long_name": "time",
+            "standard_name": "time",
+            "units": "days since 1994-02-20 00:00:00"
+        }
+    },
+    "zarr_consolidated_format": 1
+}

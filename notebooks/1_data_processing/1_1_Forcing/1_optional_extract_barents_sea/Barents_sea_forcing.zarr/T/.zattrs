@@ -1,0 +1,10 @@
+{
+    "_ARRAY_DIMENSIONS": [
+        "depth",
+        "latitude",
+        "longitude",
+        "time"
+    ],
+    "standard_name": "sea_water_potential_temperature_vertical_mean_over_pelagic_layer",
+    "units": "degree_Celsius"
+}
