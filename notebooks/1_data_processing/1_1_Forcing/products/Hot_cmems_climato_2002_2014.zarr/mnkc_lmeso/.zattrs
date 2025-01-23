@@ -1,0 +1,12 @@
+{
+    "_ARRAY_DIMENSIONS": [
+        "latitude",
+        "longitude",
+        "time"
+    ],
+    "carbon_to_wet_weight_conversion_factor": 11.9,
+    "day_layer": "lower mesopelagic (3)",
+    "night_layer": "lower mesopelagic (3)",
+    "standard_name": "mass_content_of_lower_mesopelagic_micronekton_expressed_as_wet_weight_in_sea_water",
+    "units": "g m-2"
+}
