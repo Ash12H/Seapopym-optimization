@@ -48,6 +48,7 @@ class Parameter:
             def random_exclusive(lower: float, upper: float) -> float:
                 count = 0
                 while count < MAXIMUM_INIT_TRY:
+                    # TODO(Jules): There might be a better initialization method. Hypercube ?
                     value = random.uniform(lower, upper)
                     if value not in (lower, upper):
                         return value
