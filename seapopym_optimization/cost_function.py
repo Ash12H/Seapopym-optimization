@@ -35,6 +35,8 @@ class Observation:
 
     observation: xr.Dataset
     """The observations units must be convertible to `BIOMASS_UNITS`."""
+    observation_type: str = field(default="daily")
+    """The type of observation: 'monthly', 'daily', or 'weekly'."""
 
     def __post_init__(self: Observation) -> None:
         """Check that the observation data is complient with the format of the predicted biomass."""
@@ -64,6 +66,10 @@ class Observation:
             )
             raise ValueError(msg) from e
 
+        if self.observation_type not in ["daily", "monthly", "weekly"]:
+            msg = "The observation type must be 'daily', 'monthly', or 'weekly'. Default is 'daily'."
+            raise ValueError(msg)
+
     def aggregate_prediction_by_layer(
         self: Observation, predicted: xr.DataArray, position: Sequence[int], name: str
     ) -> xr.DataArray:
@@ -82,6 +88,18 @@ class Observation:
 
         return xr.concat(final_aggregated, dim=z_coord).rename(name)
 
+    def resample_data_by_time_type(self: Observation, data: xr.DataArray) -> xr.DataArray:
+        """Resample the data according to the observation type."""
+        if self.observation_type == "daily":
+            return data.cf.resample(T="1D").mean().cf.dropna("T")
+        if self.observation_type == "monthly":
+            return data.cf.resample(T="1ME").mean().cf.dropna("T")
+        if self.observation_type == "weekly":
+            return data.cf.resample(T="1W").mean().cf.dropna("T")
+
+        msg = "The observation type must be 'daily', 'monthly', or 'weekly'. Default is 'daily'."
+        raise ValueError(msg)
+
     def mean_square_error(
         self: Observation, predicted: xr.Dataset, night_layer: Sequence[int], day_layer: Sequence[int]
     ) -> None:
@@ -99,6 +117,8 @@ class Observation:
             return cost
 
         predicted = predicted.pint.quantify().pint.to(BIOMASS_UNITS).pint.dequantify()
+
+        predicted = self.resample_data_by_time_type(predicted)
 
         cost = 0
         if "day" in self.observation:
