@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, Sequence
 
 import numpy as np
@@ -136,9 +136,18 @@ class GeneticAlgorithm:
     client: Client | None = None
     constraint: Sequence[GenericConstraint] | None = None
 
+    logbook: tools.Logbook | None = field(default=None, init=False, repr=False)
+
     def __post_init__(self: GeneticAlgorithm) -> None:
         """Check parameters."""
         # TODO(Jules): Vérifier que les paramètres ont des noms uniques.
+
+    def update_logbook(self: GeneticAlgorithm, logbook: tools.Logbook) -> None:
+        """Update the logbook."""
+        if self.logbook is None:
+            self.logbook = logbook
+        else:
+            self.logbook = pd.concat([self.logbook, logbook])
 
     def _helper_core_manage_inf(self: GeneticAlgorithm, func: Callable, *args, **kwargs) -> Callable:
         """Transforme the function to manage np.inf values returned by the constraints."""
@@ -159,7 +168,8 @@ class GeneticAlgorithm:
         individuals: Sequence,
         generation: int,
     ) -> tuple[tools.Logbook, tools.HallOfFame]:
-        """Evaluate the cost function and update the statistiques."""
+        """Evaluate the cost function of all new individuals and update the statistiques."""
+        # 1 - UPDATE POPULATION
         known = [ind.fitness.valid for ind in individuals]
         invalid_ind = [ind for ind in individuals if not ind.fitness.valid]
         if self.client is None:
@@ -170,19 +180,21 @@ class GeneticAlgorithm:
         for ind, fit in zip(invalid_ind, fitnesses):
             ind.fitness.values = fit
 
+        # 2 - GENERATE LOGBOOK
         df_logbook = pd.DataFrame(
             individuals, columns=self.cost_function.functional_groups.unique_functional_groups_parameters_ordered.keys()
         )
-        df_logbook["fitness"] = [ind.fitness.values[0] for ind in individuals]
+        scores = [ind.fitness.values for ind in individuals]
+        final_scores = np.dot(scores, self.parameter_genetic_algorithm.cost_function_weight)
+        df_logbook["fitness"] = scores
+        df_logbook["fitness_final"] = final_scores
         df_logbook["previous_generation"] = known
         df_logbook["generation"] = generation
         df_logbook.index.name = "individual"
         df_logbook = df_logbook.reset_index()
         return df_logbook.set_index(["generation", "previous_generation", "individual"]).sort_index()
 
-    def _core(
-        self: GeneticAlgorithm, toolbox: base.Toolbox
-    ) -> tuple[Sequence[Sequence[float]], tools.Logbook, tools.HallOfFame]:
+    def _core(self: GeneticAlgorithm, toolbox: base.Toolbox) -> None:
         """
         The core function as it is described in the DEAP documentation. It is adapted to allow Dask client for
         parallel computing. The order used is SCM: Select, Cross, Mutate.
@@ -190,26 +202,23 @@ class GeneticAlgorithm:
         for gen in tqdm(desc="Generations", iterable=range(self.parameter_genetic_algorithm.NGEN)):
             if gen == 0:
                 population = toolbox.population(n=self.parameter_genetic_algorithm.POP_SIZE)
-
                 df_logbook = self._helper_core_evaluate(toolbox, population, gen)
             else:
                 offspring = toolbox.select(population, len(population))
                 offspring = algorithms.varAnd(
                     offspring, toolbox, self.parameter_genetic_algorithm.CXPB, self.parameter_genetic_algorithm.MUTPB
                 )  # MUTATE + MATE
-
-                df_logbook = pd.concat([df_logbook, self._helper_core_evaluate(toolbox, offspring, gen)])
+                df_logbook = self._helper_core_evaluate(toolbox, offspring, gen)
+                population[:] = offspring
 
                 # TODO(Jules): L'intégralité de la population est remplacée par les nouveaux individus. Je pourrai ajouter
                 # paramètre GGAP pour conserver les meilleurs individus de la génération précédente.
                 # Cf. Maria Angelova and Tania Pencheva 2011 - Tuning Genetic Algorithm Parameters to Improve Convergence
                 # Time
 
-                population[:] = offspring
+            self.update_logbook(df_logbook)
             clear_output(wait=True)
-            display(_compute_stats(df_logbook))
-
-        return df_logbook
+            display(_compute_stats(self.logbook))
 
     def optimize(self: GeneticAlgorithm) -> GeneticAlgorithmViewer:
         """This is the main function. Use it to optimize your model."""
@@ -218,7 +227,7 @@ class GeneticAlgorithm:
         if self.constraint is not None:
             for constraint in self.constraint:
                 toolbox.decorate("evaluate", constraint.generate(list(ordered_parameters.keys())))
-        result = self._core(toolbox)
+        self._core(toolbox)
         return GeneticAlgorithmViewer(
-            self.cost_function.functional_groups.unique_functional_groups_parameters_ordered.values(), result
+            self.cost_function.functional_groups.unique_functional_groups_parameters_ordered.values(), self.logbook
         )

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Sequence
 
 import numpy as np
@@ -19,10 +19,10 @@ if TYPE_CHECKING:
 
 def _compute_stats(logbook: pd.DataFrame) -> pd.DataFrame:
     """Compute the statistics of the generations."""
-    stats = logbook[np.isfinite(logbook["fitness"])]
+    stats = logbook[np.isfinite(logbook["fitness_final"])]
     generation_gap = stats.reset_index().groupby("generation")["previous_generation"].agg(lambda x: np.sum(x) / len(x))
     stats = (
-        stats.groupby("generation")["fitness"]
+        stats.groupby("generation")["fitness_final"]
         .aggregate(["mean", "std", "min", "max", "count"])
         .rename(columns={"count": "valid"})
     )
@@ -39,6 +39,10 @@ class GeneticAlgorithmViewer:
 
     _parameters: Sequence[Parameter]
     _logbook: pd.DataFrame
+    _minimize: bool = field(default=None, init=False)
+
+    def __post_init__(self: GeneticAlgorithmViewer):
+        self._minimize = self._logbook["fitness_final"].max() < 0
 
     @property
     def parameters_names(self: GeneticAlgorithmViewer):
@@ -60,7 +64,9 @@ class GeneticAlgorithmViewer:
     @property
     def logbook(self: GeneticAlgorithmViewer) -> pd.DataFrame:
         """A review of the generations stats."""
-        return self._logbook.copy()
+        logbook = self._logbook.copy().drop(columns=["fitness"]).rename(columns={"fitness_final": "fitness"})
+        logbook["fitness"] = logbook["fitness"].abs()
+        return logbook
 
     @property
     def hall_of_fame(self: GeneticAlgorithmViewer) -> pd.DataFrame:
@@ -70,7 +76,7 @@ class GeneticAlgorithmViewer:
         condition_not_already_calculated = ~logbook.index.get_level_values("previous_generation")
         condition = condition_not_inf & condition_not_already_calculated
         previous_generation_level = 1
-        return logbook[condition].sort_values("fitness", ascending=True).droplevel(previous_generation_level)
+        return logbook[condition].sort_values("fitness", ascending=self._minimize).droplevel(previous_generation_level)
 
     def fitness_evolution(self: GeneticAlgorithmViewer, log_y: bool = True) -> Figure:
         data = self.logbook[np.isfinite(self.logbook["fitness"])]["fitness"].reset_index()
