@@ -101,13 +101,20 @@ class Observation:
         raise ValueError(msg)
 
     def mean_square_error(
-        self: Observation, predicted: xr.Dataset, night_layer: Sequence[int], day_layer: Sequence[int]
+        self: Observation,
+        predicted: xr.Dataset,
+        night_layer: Sequence[int],
+        day_layer: Sequence[int],
+        *,
+        standardize: bool = False,
     ) -> None:
         """Return the mean square error of the predicted and observed biomass."""
 
         def _mse(pred: xr.DataArray, obs: xr.DataArray) -> float:
             """Mean square error applied to xr.DataArray."""
             cost = float(((obs - pred) ** 2).mean())
+            if standardize:
+                cost /= float(obs.std())
             if not np.isfinite(cost):
                 msg = (
                     "Nan value in cost function. The observation cannot be compared to the prediction. Verify that "
@@ -203,6 +210,7 @@ class NoTransportCostFunction(GenericCostFunction):
 
     kwargs: dict | None = None
     # TODO(Jules): Replace kwargs by the NoTransport configuration structure -> Env and Kernel
+    standardize_rmse: bool = False
 
     def __post_init__(self: NoTransportCostFunction) -> None:
         """Check that the kwargs are set."""
@@ -231,6 +239,11 @@ class NoTransportCostFunction(GenericCostFunction):
         predicted_biomass = model.export_biomass().load()
 
         return tuple(
-            obs.mean_square_error(predicted=predicted_biomass, day_layer=day_layers, night_layer=night_layers)
+            obs.mean_square_error(
+                predicted=predicted_biomass,
+                day_layer=day_layers,
+                night_layer=night_layers,
+                standardize=self.standardize_rmse,
+            )
             for obs in observations
         )
