@@ -136,11 +136,13 @@ class GeneticAlgorithmViewer:
 
     def parallel_coordinates(
         self: GeneticAlgorithmViewer,
+        *,
         nbest: int | None = None,
+        parameter_groups: list[list[str]] | None = None,
         colorscale: list | str | None = None,
         unselected_opacity: float = 0.2,
-    ) -> Figure:
-        """Print the `nhead` best individuals in the hall_of_fame as a parallel coordinates plot."""
+    ) -> list[Figure]:
+        """Print the `nhead` best individuals in the hall_of_fame as parallel coordinates plots for each parameter group."""
         if colorscale is None:
             colorscale = [
                 [0, "rgba(0, 0, 255, 0.8)"],
@@ -153,41 +155,49 @@ class GeneticAlgorithmViewer:
         if nbest is not None:
             hof_fitness = hof_fitness.iloc[:nbest]
 
-        dimensions = [
-            {
-                "range": [self.parameters_lower_bounds[i], self.parameters_upper_bound[i]],
-                "label": self.parameters_names[i],
-                "values": hof_fitness[self.parameters_names[i]],
-            }
-            for i in range(len(self.parameters_names))
-        ]
+        if parameter_groups is None:
+            parameter_groups = [self.parameters_names]
 
-        # NOTE(Jules): We reversed the values because Plotly set the individuals with the maximum value at the front.
-        # As we minimize the function, we want the individuals with the minimum value at the front for a better
-        # visualization.
-        fig = go.Figure(
-            data=go.Parcoords(
-                line={
-                    "color": -hof_fitness["fitness"],
-                    "colorscale": colorscale,
-                    "showscale": True,
-                    "colorbar": {
-                        "title": "Cost function score",
-                        "tickvals": [-hof_fitness["fitness"].min(), -hof_fitness["fitness"].max()],
-                        "tickmode": "array",
-                        "ticktext": [hof_fitness["fitness"].min(), hof_fitness["fitness"].max()],
+        figures = []
+
+        for group in parameter_groups:
+            dimensions = [
+                {
+                    "range": [
+                        self.parameters_lower_bounds[self.parameters_names.index(param)],
+                        self.parameters_upper_bound[self.parameters_names.index(param)],
+                    ],
+                    "label": param,
+                    "values": hof_fitness[param],
+                }
+                for param in group
+            ]
+
+            fig = go.Figure(
+                data=go.Parcoords(
+                    line={
+                        "color": -hof_fitness["fitness"],
+                        "colorscale": colorscale,
+                        "showscale": True,
+                        "colorbar": {
+                            "title": "Cost function score",
+                            "tickvals": [-hof_fitness["fitness"].min(), -hof_fitness["fitness"].max()],
+                            "tickmode": "array",
+                            "ticktext": [hof_fitness["fitness"].min(), hof_fitness["fitness"].max()],
+                        },
+                        "reversescale": True,
                     },
-                    "reversescale": True,
-                },
-                dimensions=dimensions,
-                unselected={
-                    "line": {"opacity": unselected_opacity},
-                },
+                    dimensions=dimensions,
+                    unselected={
+                        "line": {"opacity": unselected_opacity},
+                    },
+                )
             )
-        )
 
-        fig.update_layout(
-            coloraxis_colorbar={"title": "Fitness"},
-            title_text="Parameters optimization : minimization of the cost function",
-        )
-        return fig
+            fig.update_layout(
+                coloraxis_colorbar={"title": "Fitness"},
+                title_text=f"Parameters optimization : minimization of the cost function for group {parameter_groups.index(group) + 1}",
+            )
+            figures.append(fig)
+
+        return figures
