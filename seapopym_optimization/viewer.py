@@ -207,3 +207,40 @@ class GeneticAlgorithmViewer:
             figures.append(fig)
 
         return figures
+
+    def parameters_standardized_deviation(self: GeneticAlgorithmViewer) -> go.Figure:
+        param_range = {
+            name: ub - lb
+            for name, ub, lb in zip(self.parameters_names, self.parameters_upper_bound, self.parameters_lower_bounds)
+        }
+        param_std = (
+            self.logbook.reset_index()
+            .drop(columns=["previous_generation", "individual", "fitness"])
+            .groupby("generation")
+            .std()
+        )
+        param_standardized_std = param_std / param_range
+
+        fig = make_subplots(
+            rows=1,
+            cols=len(param_standardized_std.index),
+            shared_yaxes=True,
+            subplot_titles=[f"Gen={i}" for i in param_standardized_std.index],
+        )
+
+        for generation in param_standardized_std.index:
+            fig.add_trace(
+                go.Bar(
+                    y=param_standardized_std.columns,
+                    x=param_standardized_std.loc[generation],
+                    orientation="h",
+                ),
+                row=1,
+                col=generation + 1,
+            )
+
+        fig.update_layout(
+            title="Standardized std of parameters by generation",
+            showlegend=False,
+        )
+        return fig

@@ -213,12 +213,44 @@ class GeneticAlgorithm:
         df_logbook = df_logbook.reset_index()
         return df_logbook.set_index(["generation", "previous_generation", "individual"]).sort_index()
 
+    def _helper_core_initialization(self: GeneticAlgorithm) -> tuple[int, list[base.Individual]]:
+        """
+        Initialize the population.
+
+        Returns
+        -------
+        int
+            The first generation number (0 if the `logbook` is empty).
+        list[base.Individual]
+            The initialized population (an empty list if the `logbook`is empty).
+
+        """
+        if self.logbook is not None:
+            population_unprocessed = self.logbook.reset_index()
+            last_computed_generation = population_unprocessed["generation"].max()
+            population_unprocessed = population_unprocessed.query("generation == @last_computed_generation")
+
+            individuals_values = population_unprocessed.drop(
+                columns=["generation", "individual", "previous_generation", "fitness", "fitness_final"]
+            ).to_numpy()
+            population = []
+            for individual, individual_fitness in zip(individuals_values, population_unprocessed["fitness"]):
+                indiv = self.toolbox.Individual(individual)
+                indiv.fitness.values = individual_fitness
+                population.append(indiv)
+            return last_computed_generation + 1, population
+        return 0, []
+
     def _core(self: GeneticAlgorithm) -> None:
         """
         The core function as it is described in the DEAP documentation. It is adapted to allow Dask client for
         parallel computing. The order used is SCM: Select, Cross, Mutate.
         """
-        for gen in tqdm(desc="Generations", iterable=range(self.parameter_genetic_algorithm.NGEN)):
+        # INIT POPULATION IF LOGBOOK NOT EMPTY
+        first_generation, population = self._helper_core_initialization()
+
+        # RUN THE GENETIC ALGORITHM
+        for gen in tqdm(desc="Generations", iterable=range(first_generation, self.parameter_genetic_algorithm.NGEN)):
             if gen == 0:
                 population = self.toolbox.population(n=self.parameter_genetic_algorithm.POP_SIZE)
                 df_logbook = self._helper_core_evaluate(self.toolbox, population, gen)
@@ -248,5 +280,6 @@ class GeneticAlgorithm:
         """This is the main function. Use it to optimize your model."""
         self._core()
         return GeneticAlgorithmViewer(
-            self.cost_function.functional_groups.unique_functional_groups_parameters_ordered.values(), self.logbook
+            self.cost_function.functional_groups.unique_functional_groups_parameters_ordered.values(),
+            self.logbook.copy(),
         )
