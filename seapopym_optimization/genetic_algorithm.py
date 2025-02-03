@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Sequence
 
 import numpy as np
@@ -100,6 +101,8 @@ class GeneticAlgorithmParameters:
                 super().__init__(iterator)
                 self.fitness = Fitness()
 
+        toolbox.register("Individual", Individual)
+
         for param in parameters:
             toolbox.register(param.name, param.init_method, param.lower_bound, param.upper_bound)
 
@@ -135,12 +138,28 @@ class GeneticAlgorithm:
     cost_function: GenericCostFunction
     client: Client | None = None
     constraint: Sequence[GenericConstraint] | None = None
+    logbook_path: Path | str | None = None
 
     logbook: tools.Logbook | None = field(default=None, init=False, repr=False)
+    toolbox: base.Toolbox | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self: GeneticAlgorithm) -> None:
         """Check parameters."""
         # TODO(Jules): Vérifier que les paramètres ont des noms uniques.
+        # LOGBOOK
+        if self.logbook_path is not None:
+            if not isinstance(self.logbook_path, Path):
+                self.logbook_path = Path(self.logbook_path)
+            if self.logbook_path.exists():
+                self.logbook = pd.read_json(self.logbook_path, orient="table")
+        # TOOLBOX
+        ordered_parameters = self.cost_function.functional_groups.unique_functional_groups_parameters_ordered
+        self.toolbox = self.parameter_genetic_algorithm.generate_toolbox(
+            ordered_parameters.values(), self.cost_function
+        )
+        if self.constraint is not None:
+            for constraint in self.constraint:
+                self.toolbox.decorate("evaluate", constraint.generate(list(ordered_parameters.keys())))
 
     def update_logbook(self: GeneticAlgorithm, logbook: tools.Logbook) -> None:
         """Update the logbook."""
@@ -194,21 +213,24 @@ class GeneticAlgorithm:
         df_logbook = df_logbook.reset_index()
         return df_logbook.set_index(["generation", "previous_generation", "individual"]).sort_index()
 
-    def _core(self: GeneticAlgorithm, toolbox: base.Toolbox) -> None:
+    def _core(self: GeneticAlgorithm) -> None:
         """
         The core function as it is described in the DEAP documentation. It is adapted to allow Dask client for
         parallel computing. The order used is SCM: Select, Cross, Mutate.
         """
         for gen in tqdm(desc="Generations", iterable=range(self.parameter_genetic_algorithm.NGEN)):
             if gen == 0:
-                population = toolbox.population(n=self.parameter_genetic_algorithm.POP_SIZE)
-                df_logbook = self._helper_core_evaluate(toolbox, population, gen)
+                population = self.toolbox.population(n=self.parameter_genetic_algorithm.POP_SIZE)
+                df_logbook = self._helper_core_evaluate(self.toolbox, population, gen)
             else:
-                offspring = toolbox.select(population, len(population))
+                offspring = self.toolbox.select(population, len(population))
                 offspring = algorithms.varAnd(
-                    offspring, toolbox, self.parameter_genetic_algorithm.CXPB, self.parameter_genetic_algorithm.MUTPB
+                    offspring,
+                    self.toolbox,
+                    self.parameter_genetic_algorithm.CXPB,
+                    self.parameter_genetic_algorithm.MUTPB,
                 )  # MUTATE + MATE
-                df_logbook = self._helper_core_evaluate(toolbox, offspring, gen)
+                df_logbook = self._helper_core_evaluate(self.toolbox, offspring, gen)
                 population[:] = offspring
 
                 # TODO(Jules): L'intégralité de la population est remplacée par les nouveaux individus. Je pourrai ajouter
@@ -219,15 +241,12 @@ class GeneticAlgorithm:
             self.update_logbook(df_logbook)
             clear_output(wait=True)
             display(_compute_stats(self.logbook))
+            if self.logbook_path is not None:
+                self.logbook.to_json(self.logbook_path, orient="table")
 
     def optimize(self: GeneticAlgorithm) -> GeneticAlgorithmViewer:
         """This is the main function. Use it to optimize your model."""
-        ordered_parameters = self.cost_function.functional_groups.unique_functional_groups_parameters_ordered
-        toolbox = self.parameter_genetic_algorithm.generate_toolbox(ordered_parameters.values(), self.cost_function)
-        if self.constraint is not None:
-            for constraint in self.constraint:
-                toolbox.decorate("evaluate", constraint.generate(list(ordered_parameters.keys())))
-        self._core(toolbox)
+        self._core()
         return GeneticAlgorithmViewer(
             self.cost_function.functional_groups.unique_functional_groups_parameters_ordered.values(), self.logbook
         )
