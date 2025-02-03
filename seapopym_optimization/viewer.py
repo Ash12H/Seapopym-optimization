@@ -178,7 +178,8 @@ class GeneticAlgorithmViewer:
                 }
                 for param in group
             ]
-
+            # NOTE(Jules): It is impossible to choose the order of Z-levels in plotly. So I use the negative fitness to
+            # have the best individuals on front.
             fig = go.Figure(
                 data=go.Parcoords(
                     line={
