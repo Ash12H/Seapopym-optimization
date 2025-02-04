@@ -280,6 +280,8 @@ class GeneticAlgorithm:
         """This is the main function. Use it to optimize your model."""
         self._core()
         return GeneticAlgorithmViewer(
-            self.cost_function.functional_groups.unique_functional_groups_parameters_ordered.values(),
-            self.logbook.copy(),
+            parameters=self.cost_function.functional_groups,
+            forcing_parameters=self.cost_function.forcing_parameters,
+            logbook=self.logbook.copy(),
+            observations=self.cost_function.observations,
         )

@@ -8,13 +8,18 @@ from typing import TYPE_CHECKING, Sequence
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
+import xarray as xr
 from plotly.subplots import make_subplots
+
+from seapopym_optimization import wrapper
 
 if TYPE_CHECKING:
     import pandas as pd
     from plotly.graph_objects import Figure
+    from seapopym.configuration.no_transport.parameter import ForcingParameters
 
-    from seapopym_optimization.functional_groups import Parameter
+    from seapopym_optimization.cost_function import Observation
+    from seapopym_optimization.functional_groups import AllGroups
 
 
 def _compute_stats(logbook: pd.DataFrame) -> pd.DataFrame:
@@ -37,36 +42,35 @@ class GeneticAlgorithmViewer:
     results.
     """
 
-    _parameters: Sequence[Parameter]
-    _logbook: pd.DataFrame
-    _minimize: bool = field(default=None, init=False)
+    logbook: pd.DataFrame
+    parameters: AllGroups
+    forcing_parameters: ForcingParameters
+    observations: Sequence[Observation]
+    _minimize: bool = field(init=False)
 
-    def __post_init__(self: GeneticAlgorithmViewer):
-        self._minimize = self._logbook["fitness_final"].max() < 0
+    def __post_init__(self: GeneticAlgorithmViewer) -> None:
+        """Check the logbook and set the minimize attribute."""
+        self._minimize = self.logbook["fitness_final"].max() < 0
+
+        self.logbook = self.logbook.drop(columns=["fitness"]).rename(columns={"fitness_final": "fitness"})
+        self.logbook["fitness"] = self.logbook["fitness"].abs()
 
     @property
-    def parameters_names(self: GeneticAlgorithmViewer):
-        return [fg.name for fg in self._parameters]
+    def parameters_names(self: GeneticAlgorithmViewer) -> list[str]:
+        return list(self.parameters.unique_functional_groups_parameters_ordered.keys())
 
     @property
     def parameters_lower_bounds(self: GeneticAlgorithmViewer):
-        return [fg.lower_bound for fg in self._parameters]
+        return [param.lower_bound for param in self.parameters.unique_functional_groups_parameters_ordered.values()]
 
     @property
     def parameters_upper_bound(self: GeneticAlgorithmViewer):
-        return [fg.upper_bound for fg in self._parameters]
+        return [param.upper_bound for param in self.parameters.unique_functional_groups_parameters_ordered.values()]
 
     @property
     def stats(self: GeneticAlgorithmViewer) -> pd.DataFrame:
         """A review of the generations stats."""
         return _compute_stats(self.logbook)
-
-    @property
-    def logbook(self: GeneticAlgorithmViewer) -> pd.DataFrame:
-        """A review of the generations stats."""
-        logbook = self._logbook.copy().drop(columns=["fitness"]).rename(columns={"fitness_final": "fitness"})
-        logbook["fitness"] = logbook["fitness"].abs()
-        return logbook
 
     @property
     def hall_of_fame(self: GeneticAlgorithmViewer) -> pd.DataFrame:
@@ -78,7 +82,25 @@ class GeneticAlgorithmViewer:
         previous_generation_level = 1
         return logbook[condition].sort_values("fitness", ascending=self._minimize).droplevel(previous_generation_level)
 
-    def fitness_evolution(self: GeneticAlgorithmViewer, log_y: bool = True) -> Figure:
+    def best_individuals_simulations(self: GeneticAlgorithmViewer, nbest: int | None = None) -> go.Figure:
+        biomass_accumulated = []
+        for cpt, (_, individual_parameters) in enumerate(self.hall_of_fame[:nbest].iterrows()):
+            individual = self.parameters.generate_matrix(
+                [individual_parameters[name] for name in self.parameters_names]
+            )
+            model = wrapper.model_generator_no_transport(
+                forcing_parameters=self.forcing_parameters,
+                fg_parameters=wrapper.FunctionalGroupGeneratorNoTransport(
+                    parameters=individual, groups_name=self.parameters.functional_groups_name
+                ),
+            )
+            model.run()
+
+            biomass_accumulated.append(model.export_biomass().expand_dims({"individual": [cpt]}))
+        return xr.concat(biomass_accumulated, dim="individual")
+
+    def fitness_evolution(self: GeneticAlgorithmViewer, *, log_y: bool = True) -> Figure:
+        """Print the evolution of the fitness by generation."""
         data = self.logbook[np.isfinite(self.logbook["fitness"])]["fitness"].reset_index()
         figure = px.box(data_frame=data, x="generation", y="fitness", points=False, log_y=log_y)
 
@@ -103,7 +125,8 @@ class GeneticAlgorithmViewer:
         figure.update_layout(title_text="Fitness evolution")
         return figure
 
-    def box_plot(self: GeneticAlgorithmViewer, columns_number: int, nbest: int | None = None):
+    def box_plot(self: GeneticAlgorithmViewer, columns_number: int, nbest: int | None = None) -> go.Figure:
+        """Print the `nbest` best individuals in the hall_of_fame as box plots."""
         nb_fig = len(self.parameters_names)
         nb_row = nb_fig // columns_number + (1 if nb_fig % columns_number > 0 else 0)
 
@@ -210,6 +233,7 @@ class GeneticAlgorithmViewer:
         return figures
 
     def parameters_standardized_deviation(self: GeneticAlgorithmViewer) -> go.Figure:
+        """Print the standardized deviation of the parameters by generation."""
         param_range = {
             name: ub - lb
             for name, ub, lb in zip(self.parameters_names, self.parameters_upper_bound, self.parameters_lower_bounds)
@@ -244,4 +268,41 @@ class GeneticAlgorithmViewer:
             title="Standardized std of parameters by generation",
             showlegend=False,
         )
+        return fig
+
+    def parameters_scatter_matrix(self: GeneticAlgorithmViewer, nbest: int | None = None, **kwargs: dict) -> go.Figure:
+        """
+        Print the scatter matrix of the parameters.
+        Usefull to explore wich combination of parameters are used and if the distribution is correct.
+        """
+        data = self.hall_of_fame
+        if nbest is not None:
+            data = data[:nbest]
+
+        fig = px.scatter_matrix(
+            data,
+            dimensions=data.columns[:-1],
+            height=1500,
+            width=1500,
+            color="fitness",
+            color_continuous_scale=[
+                (0, "rgba(0,0,255,1)"),
+                (0.3, "rgba(255,0,0,0.8)"),
+                (1, "rgba(255,255,255,0.0)"),
+            ],
+            **kwargs,
+        )
+
+        fig.update_traces(marker={"size": 3}, unselected={"marker": {"opacity": 0.01}})
+
+        param_bounds = {
+            name: (lb, ub)
+            for name, lb, ub in zip(self.parameters_names, self.parameters_lower_bounds, self.parameters_upper_bound)
+        }
+
+        for i, param_name in enumerate(data.columns[:-1]):
+            lower_bound = param_bounds[param_name][0]
+            upper_bound = param_bounds[param_name][1]
+            fig.update_xaxes(range=[lower_bound, upper_bound], row=i + 1, col=i + 1)
+
         return fig
