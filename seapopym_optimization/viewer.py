@@ -97,6 +97,13 @@ class GeneticAlgorithmViewer:
         original_model.run()
         return original_model.export_biomass()
 
+    @property
+    def best_simulation(self: GeneticAlgorithmViewer) -> xr.Dataset:
+        if self._nbest_simulations is not None:
+            return self._nbest_simulations.sel(individual=0)
+
+        return self.best_individuals_simulations(nbest=1)
+
     def best_individuals_simulations(
         self: GeneticAlgorithmViewer,
         nbest: int | None = None,
