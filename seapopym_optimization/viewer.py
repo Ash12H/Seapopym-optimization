@@ -47,7 +47,8 @@ class GeneticAlgorithmViewer:
     parameters: AllGroups
     forcing_parameters: ForcingParameters
     observations: Sequence[Observation]
-    _minimize: bool = field(init=False)
+    _minimize: bool = field(init=False, default=None)
+    _nbest_simulations: xr.Dataset = field(init=False, default=None)
 
     def __post_init__(self: GeneticAlgorithmViewer) -> None:
         """Check the logbook and set the minimize attribute."""
@@ -83,15 +84,38 @@ class GeneticAlgorithmViewer:
         previous_generation_level = 1
         return logbook[condition].sort_values("fitness", ascending=self._minimize).droplevel(previous_generation_level)
 
+    @property
+    def original_simulation(self: GeneticAlgorithmViewer) -> xr.Dataset:
+        original_config = [[0, 0, 0.1668, 10.38, -0.11, 150, -0.15]]
+        original_model = wrapper.model_generator_no_transport(
+            forcing_parameters=self.forcing_parameters,
+            fg_parameters=wrapper.FunctionalGroupGeneratorNoTransport(
+                parameters=original_config, groups_name=["Total"]
+            ),
+        )
+
+        original_model.run()
+        return original_model.export_biomass()
+
     def best_individuals_simulations(
         self: GeneticAlgorithmViewer,
         nbest: int | None = None,
         client: Client | None = None,
-    ) -> go.Figure:
+    ) -> xr.Dataset:
+        min_nbest = 0
+        if self._nbest_simulations is not None:
+            if nbest <= self._nbest_simulations.sizes["individual"]:
+                return self._nbest_simulations.sel(individual=slice(None, nbest - 1))
+
+            min_nbest = self._nbest_simulations.sizes["individual"]
+
         individuals_parameterization = []
-        for cpt, (_, individual_parameters) in enumerate(self.hall_of_fame[:nbest].iterrows()):
+        for cpt, (_, individual_parameters) in enumerate(self.hall_of_fame[min_nbest:nbest].iterrows()):
             individuals_parameterization.append(
-                (cpt, self.parameters.generate_matrix([individual_parameters[name] for name in self.parameters_names]))
+                (
+                    min_nbest + cpt,
+                    self.parameters.generate_matrix([individual_parameters[name] for name in self.parameters_names]),
+                )
             )
 
         def run_simulation(individual: tuple[int, np.ndarray]):
@@ -111,7 +135,12 @@ class GeneticAlgorithmViewer:
         biomass_accumulated = client.map(run_simulation, individuals_parameterization)
         biomass_accumulated = client.gather(biomass_accumulated)
 
-        return xr.concat(biomass_accumulated, dim="individual")
+        if self._nbest_simulations is not None:
+            self._nbest_simulations = xr.concat([self._nbest_simulations, *biomass_accumulated], dim="individual")
+        else:
+            self._nbest_simulations = xr.concat(biomass_accumulated, dim="individual")
+
+        return self._nbest_simulations
 
     def fitness_evolution(self: GeneticAlgorithmViewer, *, log_y: bool = True) -> Figure:
         """Print the evolution of the fitness by generation."""
