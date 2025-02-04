@@ -9,6 +9,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import xarray as xr
+from dask.distributed import Client
 from plotly.subplots import make_subplots
 
 from seapopym_optimization import wrapper
@@ -82,21 +83,34 @@ class GeneticAlgorithmViewer:
         previous_generation_level = 1
         return logbook[condition].sort_values("fitness", ascending=self._minimize).droplevel(previous_generation_level)
 
-    def best_individuals_simulations(self: GeneticAlgorithmViewer, nbest: int | None = None) -> go.Figure:
-        biomass_accumulated = []
+    def best_individuals_simulations(
+        self: GeneticAlgorithmViewer,
+        nbest: int | None = None,
+        client: Client | None = None,
+    ) -> go.Figure:
+        individuals_parameterization = []
         for cpt, (_, individual_parameters) in enumerate(self.hall_of_fame[:nbest].iterrows()):
-            individual = self.parameters.generate_matrix(
-                [individual_parameters[name] for name in self.parameters_names]
+            individuals_parameterization.append(
+                (cpt, self.parameters.generate_matrix([individual_parameters[name] for name in self.parameters_names]))
             )
+
+        def run_simulation(individual: tuple[int, np.ndarray]):
+            """Take an individual as (number, parameters) and run the simulation."""
             model = wrapper.model_generator_no_transport(
                 forcing_parameters=self.forcing_parameters,
                 fg_parameters=wrapper.FunctionalGroupGeneratorNoTransport(
-                    parameters=individual, groups_name=self.parameters.functional_groups_name
+                    parameters=individual[1], groups_name=self.parameters.functional_groups_name
                 ),
             )
             model.run()
+            return model.export_biomass().expand_dims({"individual": [individual[0]]})
 
-            biomass_accumulated.append(model.export_biomass().expand_dims({"individual": [cpt]}))
+        if client is None:
+            client = Client()
+
+        biomass_accumulated = client.map(run_simulation, individuals_parameterization)
+        biomass_accumulated = client.gather(biomass_accumulated)
+
         return xr.concat(biomass_accumulated, dim="individual")
 
     def fitness_evolution(self: GeneticAlgorithmViewer, *, log_y: bool = True) -> Figure:
