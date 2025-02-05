@@ -385,9 +385,7 @@ class GeneticAlgorithmViewer:
     def time_series(
         self: GeneticAlgorithmViewer, nbest: int, title: Iterable[str] | None = None, client=None
     ) -> go.Figure:
-        from IPython.display import display
-
-        def _plot_observation(observation: xr.DataArray, layer: int) -> go.Scatter:
+        def _plot_observation(observation: xr.DataArray, day_cycle: str, layer: int) -> go.Scatter:
             y = observation.sel(layer=layer)
             x = y.cf["T"]
             return go.Scatter(
@@ -395,8 +393,8 @@ class GeneticAlgorithmViewer:
                 y=y,
                 mode="lines+markers",
                 name=f"Observed {day_cycle} layer {layer}",
-                line={"dash": "dash", "width": 1},
-                marker={"size": 4, "symbol": "x"},
+                line={"dash": "dash", "width": 1, "color": "black"},
+                marker={"size": 4, "symbol": "x", "color": "black"},
             )
 
         def _compute_fgroup_in_layer(day_cycle: str, layer: int) -> list[int]:
@@ -406,7 +404,9 @@ class GeneticAlgorithmViewer:
                 if (fg.night_layer == layer and day_cycle == "night") or (fg.day_layer == layer and day_cycle == "day")
             ]
 
-        def _plot_best_prediction(prediction: xr.DataArray, fgroup: Iterable[int]) -> go.Scatter:
+        def _plot_best_prediction(
+            prediction: xr.DataArray, fgroup: Iterable[int], day_cycle: str, layer: int
+        ) -> go.Scatter:
             y = prediction.sel(functional_group=fgroup, individual=0).sum("functional_group")
             x = y.cf["T"]
             return go.Scatter(
@@ -414,7 +414,30 @@ class GeneticAlgorithmViewer:
                 y=y,
                 mode="lines",
                 name=f"Predicted {day_cycle} layer {layer}",
-                line={"dash": "solid", "width": 2},
+                line={
+                    "dash": "solid",
+                    "width": 2,
+                    "color": "royalblue" if day_cycle == "night" else "firebrick",
+                },
+            )
+
+        def _plot_range_best_predictions(
+            prediction: xr.DataArray, fgroup: Iterable[int], nbest: int, day_cycle: str, layer: int
+        ) -> None:
+            y = prediction.sel(functional_group=fgroup).sum("functional_group")
+            x = best_simulations.time.to_series()
+            x_rev = pd.concat([x, x[::-1]])
+            y_upper = y.max("individual")
+            y_lower = y.min("individual")[::-1]
+            y_rev = np.concatenate([y_upper, y_lower])
+
+            return go.Scatter(
+                x=x_rev,
+                y=y_rev,
+                fill="toself",
+                line_color="rgba(0,0,0,0)",
+                fillcolor="rgba(54,92,216,0.3)" if day_cycle == "night" else "rgba(174,30,36,0.3)",
+                name=f"{day_cycle} layer {layer} : {nbest} best individuals",
             )
 
         best_simulations = self.best_individuals_simulations(nbest, client=client)
@@ -441,6 +464,8 @@ class GeneticAlgorithmViewer:
                 y_title="Biomass (mg/m2)",
                 row_titles=[f"Layer {layer}" for layer in np.sort(np.unique(layer_pos))],
                 subplot_titles=["Day", "Night"],
+                horizontal_spacing=0.1,
+                vertical_spacing=0.1,
             )
             obs_data: xr.Dataset = observation.observation.pint.quantify().pint.to("milligram / meter ** 2")
             best_simulations = best_simulations.cf.sel(X=obs_data.cf["X"], Y=obs_data.cf["Y"]).cf.mean(["X", "Y"])
@@ -454,9 +479,16 @@ class GeneticAlgorithmViewer:
                         row = int(layer - upper_layer_pos) + 1  # 1-indexed
                         fgroup = _compute_fgroup_in_layer(day_cycle, layer)
                         if len(fgroup) > 0:
-                            figure.add_trace(_plot_best_prediction(best_simulations, fgroup), row=row, col=col)
+                            figure.add_trace(
+                                _plot_best_prediction(best_simulations, fgroup, day_cycle, layer), row=row, col=col
+                            )
+                            figure.add_trace(
+                                _plot_range_best_predictions(best_simulations, fgroup, nbest, day_cycle, layer),
+                                row=row,
+                                col=col,
+                            )
                         if layer in obs_data_selected.layer:
-                            figure.add_trace(_plot_observation(obs_data_selected, layer), row=row, col=col)
+                            figure.add_trace(_plot_observation(obs_data_selected, day_cycle, layer), row=row, col=col)
 
                 else:
                     pass
@@ -464,73 +496,3 @@ class GeneticAlgorithmViewer:
             all_figures.append(figure)
 
         return all_figures
-
-        # ------------------------------------------------------------------------------------------------------------ #
-
-        # ------------------------------------------------------------------------------------------------------------ #
-
-        # ------------------------------------------------------------------------------------------------------------ #
-
-        x = best_simulations.time.to_series()
-        x_rev = pd.concat([x, x[::-1]])
-
-        fig = go.Figure()
-
-        for fgroup in best_simulations.functional_group:
-            data = best_simulations.sel(functional_group=fgroup)
-            y = data.sel(individual=0).data.flatten()
-
-            y_upper = data.max("individual")
-            y_lower = data.min("individual")[::-1]
-            y_rev = np.concatenate([y_upper, y_lower])
-
-            # # D1N1 traces
-            # fig.add_trace(
-            #     go.Scatter(
-            #         x=x_rev,
-            #         y=y_rev,
-            #         fill="toself",
-            #         fillcolor="rgba(255,0,0,0.2)",
-            #         line_color="rgba(255,255,255,0)",
-            #         name=f"D1N1 : {nbest} best individuals",
-            #     )
-            # )
-
-            fig.add_trace(go.Scatter(x=x, y=y, line_color="rgb(255,0,0)", name="D1N1 : Best individual"))
-
-            # # OBSERVATIONS ------------------------------------------------ #
-
-            # fig.add_trace(
-            #     go.Scatter(
-            #         x=observations_selected_without_init.day.time.data.flatten(),
-            #         y=observations_selected_without_init.day.pint.quantify()
-            #         .pint.to("mg/m2")
-            #         .pint.dequantify()
-            #         .data.flatten(),
-            #         mode="lines+markers",
-            #         name="Day observations",
-            #         line={"dash": "dash", "color": "firebrick", "width": 1},
-            #     )
-            # )
-
-            # fig.add_trace(
-            #     go.Scatter(
-            #         x=observations_selected_without_init.night.time.data.flatten(),
-            #         y=observations_selected_without_init.night.pint.quantify()
-            #         .pint.to("mg/m2")
-            #         .pint.dequantify()
-            #         .data.flatten(),
-            #         mode="lines+markers",
-            #         name="Night observations",
-            #         line={"dash": "dash", "color": "royalblue", "width": 1},
-            #     )
-            # )
-
-            # fig.update_layout(
-            #     xaxis_title="Time",
-            #     yaxis_title="Biomass (mg/m2)",
-            #     title=f"Biomass over Time (Daily) : {title}",
-            #     showlegend=True,
-            # )
-
-            fig.show()
