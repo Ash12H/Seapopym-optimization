@@ -3,19 +3,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING, Iterable, Sequence
 
 import numpy as np
+import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import xarray as xr
-from dask.distributed import Client
 from plotly.subplots import make_subplots
 
 from seapopym_optimization import wrapper
 
 if TYPE_CHECKING:
-    import pandas as pd
+    from dask.distributed import Client
     from plotly.graph_objects import Figure
     from seapopym.configuration.no_transport.parameter import ForcingParameters
 
@@ -105,9 +105,7 @@ class GeneticAlgorithmViewer:
         return self.best_individuals_simulations(nbest=1)
 
     def best_individuals_simulations(
-        self: GeneticAlgorithmViewer,
-        nbest: int | None = None,
-        client: Client | None = None,
+        self: GeneticAlgorithmViewer, nbest: int, client: Client | None = None
     ) -> xr.Dataset:
         min_nbest = 0
         if self._nbest_simulations is not None:
@@ -137,10 +135,10 @@ class GeneticAlgorithmViewer:
             return model.export_biomass().expand_dims({"individual": [individual[0]]})
 
         if client is None:
-            client = Client()
-
-        biomass_accumulated = client.map(run_simulation, individuals_parameterization)
-        biomass_accumulated = client.gather(biomass_accumulated)
+            biomass_accumulated = [run_simulation(individual) for individual in individuals_parameterization]
+        else:
+            biomass_accumulated = client.map(run_simulation, individuals_parameterization)
+            biomass_accumulated = client.gather(biomass_accumulated)
 
         if self._nbest_simulations is not None:
             self._nbest_simulations = xr.concat([self._nbest_simulations, *biomass_accumulated], dim="individual")
@@ -356,3 +354,183 @@ class GeneticAlgorithmViewer:
             fig.update_xaxes(range=[lower_bound, upper_bound], row=i + 1, col=i + 1)
 
         return fig
+
+    def parameters_correlation_matrix(self: GeneticAlgorithmViewer, nbest: int | None = None) -> go.Figure:
+        """Print the correlation matrix of the parameters for the N best individuals."""
+        indiv_param = self.hall_of_fame.iloc[:nbest, :-1].to_numpy()
+        param_names = self.hall_of_fame.columns[:-1]
+
+        corr_matrix = np.corrcoef(indiv_param.T)
+        np.fill_diagonal(corr_matrix, np.nan)
+
+        fig = px.imshow(
+            corr_matrix,
+            text_auto=False,
+            aspect="auto",
+            color_continuous_scale=[[0, "blue"], [0.5, "white"], [1, "red"]],
+            zmin=-1,
+            zmax=1,
+            x=param_names,
+            y=param_names,
+        )
+        fig.update_layout(
+            title="Correlation Matrix of Hall of Fame Parameters (Lower Triangle)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            xaxis={"showgrid": False, "tickangle": -35},
+            yaxis={"showgrid": False},
+        )
+        return fig
+
+    def time_series(
+        self: GeneticAlgorithmViewer, nbest: int, title: Iterable[str] | None = None, client=None
+    ) -> go.Figure:
+        from IPython.display import display
+
+        def _plot_observation(observation: xr.DataArray, layer: int) -> go.Scatter:
+            y = observation.sel(layer=layer)
+            x = y.cf["T"]
+            return go.Scatter(
+                x=x,
+                y=y,
+                mode="lines+markers",
+                name=f"Observed {day_cycle} layer {layer}",
+                line={"dash": "dash", "width": 1},
+                marker={"size": 4, "symbol": "x"},
+            )
+
+        def _compute_fgroup_in_layer(day_cycle: str, layer: int) -> list[int]:
+            return [
+                fg_index
+                for fg_index, fg in enumerate(self.parameters.functional_groups)
+                if (fg.night_layer == layer and day_cycle == "night") or (fg.day_layer == layer and day_cycle == "day")
+            ]
+
+        def _plot_best_prediction(prediction: xr.DataArray, fgroup: Iterable[int]) -> go.Scatter:
+            y = prediction.sel(functional_group=fgroup, individual=0).sum("functional_group")
+            x = y.cf["T"]
+            return go.Scatter(
+                x=x,
+                y=y,
+                mode="lines",
+                name=f"Predicted {day_cycle} layer {layer}",
+                line={"dash": "solid", "width": 2},
+            )
+
+        best_simulations = self.best_individuals_simulations(nbest, client=client)
+        best_simulations = best_simulations.pint.quantify().pint.to("milligram / meter ** 2")
+
+        # ------------------------------------------------------------------------------------------------------------ #
+
+        # ------------------------------------------------------------------------------------------------------------ #
+
+        # ------------------------------------------------------------------------------------------------------------ #
+
+        nb_columns = 2  # day, night
+        layer_pos = np.ravel([(fg.night_layer, fg.day_layer) for fg in self.parameters.functional_groups])
+        upper_layer_pos = layer_pos.min()
+        lower_layer_pos = layer_pos.max()
+        nb_rows = int(lower_layer_pos - upper_layer_pos + 1)
+
+        all_figures = []
+        for fig_nb, observation in enumerate(self.observations):
+            figure = make_subplots(
+                rows=nb_rows,
+                cols=nb_columns,
+                x_title="Time",
+                y_title="Biomass (mg/m2)",
+                row_titles=[f"Layer {layer}" for layer in np.sort(np.unique(layer_pos))],
+                subplot_titles=["Day", "Night"],
+            )
+            obs_data: xr.Dataset = observation.observation.pint.quantify().pint.to("milligram / meter ** 2")
+            best_simulations = best_simulations.cf.sel(X=obs_data.cf["X"], Y=obs_data.cf["Y"]).cf.mean(["X", "Y"])
+            obs_data = obs_data.cf.mean(["X", "Y"])
+
+            for column, day_cycle in enumerate(["day", "night"]):
+                col = column + 1  # 1-indexed
+                if day_cycle in obs_data:
+                    obs_data_selected = obs_data[day_cycle]
+                    for layer in np.unique(layer_pos):
+                        row = int(layer - upper_layer_pos) + 1  # 1-indexed
+                        fgroup = _compute_fgroup_in_layer(day_cycle, layer)
+                        if len(fgroup) > 0:
+                            figure.add_trace(_plot_best_prediction(best_simulations, fgroup), row=row, col=col)
+                        if layer in obs_data_selected.layer:
+                            figure.add_trace(_plot_observation(obs_data_selected, layer), row=row, col=col)
+
+                else:
+                    pass
+            figure.update_layout(title=f"{title[fig_nb]}")
+            all_figures.append(figure)
+
+        return all_figures
+
+        # ------------------------------------------------------------------------------------------------------------ #
+
+        # ------------------------------------------------------------------------------------------------------------ #
+
+        # ------------------------------------------------------------------------------------------------------------ #
+
+        x = best_simulations.time.to_series()
+        x_rev = pd.concat([x, x[::-1]])
+
+        fig = go.Figure()
+
+        for fgroup in best_simulations.functional_group:
+            data = best_simulations.sel(functional_group=fgroup)
+            y = data.sel(individual=0).data.flatten()
+
+            y_upper = data.max("individual")
+            y_lower = data.min("individual")[::-1]
+            y_rev = np.concatenate([y_upper, y_lower])
+
+            # # D1N1 traces
+            # fig.add_trace(
+            #     go.Scatter(
+            #         x=x_rev,
+            #         y=y_rev,
+            #         fill="toself",
+            #         fillcolor="rgba(255,0,0,0.2)",
+            #         line_color="rgba(255,255,255,0)",
+            #         name=f"D1N1 : {nbest} best individuals",
+            #     )
+            # )
+
+            fig.add_trace(go.Scatter(x=x, y=y, line_color="rgb(255,0,0)", name="D1N1 : Best individual"))
+
+            # # OBSERVATIONS ------------------------------------------------ #
+
+            # fig.add_trace(
+            #     go.Scatter(
+            #         x=observations_selected_without_init.day.time.data.flatten(),
+            #         y=observations_selected_without_init.day.pint.quantify()
+            #         .pint.to("mg/m2")
+            #         .pint.dequantify()
+            #         .data.flatten(),
+            #         mode="lines+markers",
+            #         name="Day observations",
+            #         line={"dash": "dash", "color": "firebrick", "width": 1},
+            #     )
+            # )
+
+            # fig.add_trace(
+            #     go.Scatter(
+            #         x=observations_selected_without_init.night.time.data.flatten(),
+            #         y=observations_selected_without_init.night.pint.quantify()
+            #         .pint.to("mg/m2")
+            #         .pint.dequantify()
+            #         .data.flatten(),
+            #         mode="lines+markers",
+            #         name="Night observations",
+            #         line={"dash": "dash", "color": "royalblue", "width": 1},
+            #     )
+            # )
+
+            # fig.update_layout(
+            #     xaxis_title="Time",
+            #     yaxis_title="Biomass (mg/m2)",
+            #     title=f"Biomass over Time (Daily) : {title}",
+            #     showlegend=True,
+            # )
+
+            fig.show()
