@@ -496,3 +496,125 @@ class GeneticAlgorithmViewer:
             all_figures.append(figure)
 
         return all_figures
+
+    def taylor_diagram(
+        self: GeneticAlgorithmViewer, nbest: int = 1, client=None, range_theta: Iterable[int] = [0, 90]
+    ) -> go.Figure:
+        best_simulations = self.best_individuals_simulations(nbest, client=client)
+
+        day_layer = np.array([fg.day_layer for fg in self.parameters.functional_groups])
+        night_layer = np.array([fg.night_layer for fg in self.parameters.functional_groups])
+
+        data = {
+            "name": [],
+            "correlation_coefficient": [],
+            "normalized_root_mean_square_error": [],
+            "normalized_standard_deviation": [],
+            # "bias": [],
+        }
+
+        for observation in self.observations:
+            for individual in best_simulations["individual"]:
+                # TODO(Jules): Add day / night as differents individuals
+                prediction = best_simulations.sel(individual=individual)
+                data["name"].append(f"{observation.name} x {individual} x Day")
+                data["name"].append(f"{observation.name} x {individual} x Night")
+
+                corr_day, corr_night = observation.correlation_coefficient(prediction, day_layer, night_layer)
+                mse_day, mse_night = observation.mean_square_error(
+                    prediction, day_layer, night_layer, root=True, normalized=True
+                )
+                std_day, std_night = observation.normalized_standard_deviation(prediction, day_layer, night_layer)
+                # bias = observation.bias(prediction, day_layer, night_layer, standardize=True)
+
+                data["correlation_coefficient"].append(corr_day)
+                data["correlation_coefficient"].append(corr_night)
+                data["normalized_root_mean_square_error"].append(mse_day)
+                data["normalized_root_mean_square_error"].append(mse_night)
+                data["normalized_standard_deviation"].append(std_day)
+                data["normalized_standard_deviation"].append(std_night)
+
+        data["angle"] = data["correlation_coefficient"] * 90
+        # data = pd.DataFrame(data)
+
+        from IPython.display import display
+
+        display(data)
+
+        fig = px.scatter_polar(
+            data,
+            r="normalized_standard_deviation",
+            theta="angle",
+            color="bias",
+            symbol="name",
+            color_discrete_sequence=px.colors.sequential.Plasma_r,
+            start_angle=90,
+            range_theta=range_theta,
+            direction="clockwise",  # Change direction to clockwise
+            range_r=[0, 2],
+            custom_data=[
+                "name",
+                "correlation_coefficient",
+                "normalized_standard_deviation",
+                "bias",
+                "normalized_root_mean_square_error",
+            ],
+            title="Taylor diagram",
+        )
+
+        fig.update_traces(
+            marker={"size": 10},
+            hovertemplate=(
+                "<b>%{customdata[0]}</b><br><br>"
+                "Correlation: %{customdata[1]:.2f}<br>"
+                "Normalized STD: %{customdata[2]:.2f}<br>"
+                "Bias: %{customdata[3]:.2f}<br>"
+                "Normalized Bias: %{customdata[4]:.2f}<br>",
+            ),
+        )
+
+        angles = np.linspace(-90, 90, 90)
+        r_cercle = np.full_like(angles, 1)
+        fig.add_trace(
+            go.Scatterpolar(
+                r=r_cercle,
+                theta=angles,
+                mode="lines",
+                line={"color": "red", "width": 2, "dash": "dash"},
+                hoverinfo="skip",
+                showlegend=False,
+            ),
+        )
+
+        fig.update_layout(
+            coloraxis_colorbar={
+                "title": "Bias",
+                "title_side": "top",
+                "orientation": "h",
+                "len": 0.7,
+                "yanchor": "top",  # Le haut de la colorbar est en position -0.1
+                "y": -0.1,
+                "xanchor": "center",  # le centre de la colorbar est en position 0.5
+                "x": 0.5,
+            },
+            legend={
+                "xanchor": "right",
+                "yanchor": "top",
+                "x": 1,
+                "y": 1,
+                "title": "Station x Day/Night",
+            },
+            height=800,
+            margin={"l": 100, "r": 100, "t": 100, "b": 100},
+            polar={
+                "angularaxis": {
+                    "dtick": 9,
+                    "tickmode": "array",
+                    "tickvals": np.arange(-90, 91, 9),
+                    "ticktext": [f"{i:.1f}" for i in np.arange(-1, 0, 0.1)]
+                    + [f"{i:.1f}" for i in np.arange(0, 1.01, 0.1)],
+                }
+            },
+        )
+
+        fig.show()

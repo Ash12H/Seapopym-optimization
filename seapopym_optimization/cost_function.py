@@ -33,6 +33,7 @@ MAXIMUM_INIT_TRY = 1000
 class Observation:
     """The structure used to store the observation and compute the difference with the predicted data."""
 
+    name: str
     observation: xr.Dataset
     """The observations units must be convertible to `BIOMASS_UNITS`."""
     observation_type: str = field(default="daily")
@@ -69,6 +70,7 @@ class Observation:
         if self.observation_type not in ["daily", "monthly", "weekly"]:
             msg = "The observation type must be 'daily', 'monthly', or 'weekly'. Default is 'daily'."
             raise ValueError(msg)
+        self.observation = self._helper_resample_data_by_time_type(self.observation)
 
     def aggregate_prediction_by_layer(
         self: Observation, predicted: xr.DataArray, position: Sequence[int], name: str
@@ -88,7 +90,7 @@ class Observation:
 
         return xr.concat(final_aggregated, dim=z_coord).rename(name)
 
-    def resample_data_by_time_type(self: Observation, data: xr.DataArray) -> xr.DataArray:
+    def _helper_resample_data_by_time_type(self: Observation, data: xr.DataArray) -> xr.DataArray:
         """Resample the data according to the observation type."""
         if self.observation_type == "daily":
             return data.cf.resample(T="1D").mean().cf.dropna("T")
@@ -100,20 +102,58 @@ class Observation:
         msg = "The observation type must be 'daily', 'monthly', or 'weekly'. Default is 'daily'."
         raise ValueError(msg)
 
+    def _helper_day_night_apply(
+        self: Observation, predicted: xr.Dataset, day_layer: Sequence[int], night_layer: Sequence[int]
+    ) -> xr.Dataset:
+        """Apply the aggregation and resampling to the predicted data."""
+        predicted = predicted.pint.quantify().pint.to(BIOMASS_UNITS).pint.dequantify()
+        # TODO(Jules): Select the space coordinates -> same as observation.
+        predicted = self._helper_resample_data_by_time_type(predicted)
+
+        aggregated_prediction_day = self.aggregate_prediction_by_layer(predicted, day_layer, "day")
+        aggregated_prediction_night = self.aggregate_prediction_by_layer(predicted, night_layer, "night")
+
+        return {"day": aggregated_prediction_day, "night": aggregated_prediction_night}
+
     def mean_square_error(
         self: Observation,
         predicted: xr.Dataset,
-        night_layer: Sequence[int],
         day_layer: Sequence[int],
+        night_layer: Sequence[int],
         *,
-        standardize: bool = False,
-    ) -> None:
-        """Return the mean square error of the predicted and observed biomass."""
+        centered: bool = False,
+        root: bool = False,
+        normalized: bool = False,
+    ) -> Sequence[float]:
+        """
+        Return the mean square error of the predicted and observed biomass.
+
+        Parameters
+        ----------
+        predicted : xr.Dataset
+            The predicted biomass.
+        day_layer : Sequence[int]
+            The position of the functional groups during the day.
+        night_layer : Sequence[int]
+            The position of the functional groups during the night.
+        centered : bool
+            If True, return the Centered (unbiased) root mean square error (CRMSE).
+        root : bool
+            If True, the square root of the mean square error is returned.
+        standardize : bool
+            If True, the mean square error is divided by the standard deviation of the observation.
+
+        """
 
         def _mse(pred: xr.DataArray, obs: xr.DataArray) -> float:
             """Mean square error applied to xr.DataArray."""
-            cost = float(((obs - pred) ** 2).mean())
-            if standardize:
+            if centered:
+                cost = float(((pred - pred.mean()) - (obs - obs.mean())).mean() ** 2)
+            else:
+                cost = float(((obs - pred) ** 2).mean())
+            if root:
+                cost = np.sqrt(cost)
+            if normalized:
                 cost /= float(obs.std())
             if not np.isfinite(cost):
                 msg = (
@@ -121,21 +161,50 @@ class Observation:
                     "coordinates are fitting both in space and time."
                 )
                 raise ValueError(msg)
+            # WARNING(Jules): What is happening if there are several layers? Should we sum the cost?
             return cost
 
-        predicted = predicted.pint.quantify().pint.to(BIOMASS_UNITS).pint.dequantify()
-
-        predicted = self.resample_data_by_time_type(predicted)
-
-        cost = 0
+        cost = []
+        aggregated_prediction = self._helper_day_night_apply(predicted, day_layer, night_layer)
         if "day" in self.observation:
-            aggregated_prediction_day = self.aggregate_prediction_by_layer(predicted, day_layer, "day")
-            cost += _mse(pred=aggregated_prediction_day, obs=self.observation["day"])
+            cost.append(_mse(pred=aggregated_prediction["day"], obs=self.observation["day"]))
         if "night" in self.observation:
-            aggregated_prediction_night = self.aggregate_prediction_by_layer(predicted, night_layer, "night")
-            cost += _mse(pred=aggregated_prediction_night, obs=self.observation["night"])
+            cost.append(_mse(pred=aggregated_prediction["night"], obs=self.observation["night"]))
 
         return cost
+
+    # TODO(Jules): Add correlation_coefficient, normalized_standard_deviation, bias
+
+    def correlation_coefficient(
+        self: Observation,
+        predicted: xr.Dataset,
+        day_layer: Sequence[int],
+        night_layer: Sequence[int],
+        *,
+        corr_dim: str = "time",
+    ) -> None:
+        """Return the correlation coefficient of the predicted and observed biomass."""
+        aggregated_prediction = self._helper_day_night_apply(predicted, day_layer, night_layer)
+        if "day" in self.observation:
+            correlation_day = xr.corr(aggregated_prediction["day"], self.observation["day"], dim=corr_dim)
+        if "night" in self.observation:
+            correlation_night = xr.corr(aggregated_prediction["night"], self.observation["night"], dim=corr_dim)
+        return correlation_day, correlation_night
+
+    def normalized_standard_deviation(
+        self: Observation, predicted: xr.Dataset, day_layer: Sequence[int], night_layer: Sequence[int]
+    ) -> None:
+        """Return the normalized standard deviation of the predicted and observed biomass."""
+        aggregated_prediction = self._helper_day_night_apply(predicted, day_layer, night_layer)
+        if "day" in self.observation:
+            normalized_standard_deviation_day = aggregated_prediction["day"].std() / self.observation["day"].std()
+        if "night" in self.observation:
+            normalized_standard_deviation_night = aggregated_prediction["night"].std() / self.observation["night"].std()
+        return normalized_standard_deviation_day, normalized_standard_deviation_night
+
+    def bias(self: Observation, predicted: xr.Dataset, day_layer: Sequence[int], night_layer: Sequence[int]) -> None:
+        """Return the bias of the predicted and observed biomass."""
+        raise NotImplementedError("The bias is not implemented yet.")
 
 
 @dataclass
@@ -210,7 +279,9 @@ class NoTransportCostFunction(GenericCostFunction):
 
     kwargs: dict | None = None
     # TODO(Jules): Replace kwargs by the NoTransport configuration structure -> Env and Kernel
-    standardize_rmse: bool = False
+    centered_mse: bool = False
+    root_mse: bool = True
+    normalized_mse: bool = True
 
     def __post_init__(self: NoTransportCostFunction) -> None:
         """Check that the kwargs are set."""
@@ -239,11 +310,15 @@ class NoTransportCostFunction(GenericCostFunction):
         predicted_biomass = model.export_biomass().load()
 
         return tuple(
-            obs.mean_square_error(
-                predicted=predicted_biomass,
-                day_layer=day_layers,
-                night_layer=night_layers,
-                standardize=self.standardize_rmse,
+            sum(
+                obs.mean_square_error(
+                    predicted=predicted_biomass,
+                    day_layer=day_layers,
+                    night_layer=night_layers,
+                    centered=self.centered_mse,
+                    root=self.root_mse,
+                    standardize=self.normalized_mse,
+                )
             )
             for obs in observations
         )
