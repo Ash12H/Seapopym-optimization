@@ -514,11 +514,11 @@ class GeneticAlgorithmViewer:
         }
 
         for observation in self.observations:
-            for individual in best_simulations["individual"]:
+            for individual in best_simulations["individual"].data:
                 # TODO(Jules): Add day / night as differents individuals
                 prediction = best_simulations.sel(individual=individual)
-                data["name"].append(f"{observation.name} x {individual} x Day")
-                data["name"].append(f"{observation.name} x {individual} x Night")
+                data["name"].append(f"{observation.name} x Individual {individual} x Day")
+                data["name"].append(f"{observation.name} x Individual {individual} x Night")
 
                 corr_day, corr_night = observation.correlation_coefficient(prediction, day_layer, night_layer)
                 mse_day, mse_night = observation.mean_square_error(
@@ -527,25 +527,21 @@ class GeneticAlgorithmViewer:
                 std_day, std_night = observation.normalized_standard_deviation(prediction, day_layer, night_layer)
                 # bias = observation.bias(prediction, day_layer, night_layer, standardize=True)
 
-                data["correlation_coefficient"].append(corr_day)
-                data["correlation_coefficient"].append(corr_night)
-                data["normalized_root_mean_square_error"].append(mse_day)
-                data["normalized_root_mean_square_error"].append(mse_night)
-                data["normalized_standard_deviation"].append(std_day)
-                data["normalized_standard_deviation"].append(std_night)
+                data["correlation_coefficient"].append(float(corr_day))
+                data["correlation_coefficient"].append(float(corr_night))
+                data["normalized_root_mean_square_error"].append(float(mse_day))
+                data["normalized_root_mean_square_error"].append(float(mse_night))
+                data["normalized_standard_deviation"].append(float(std_day))
+                data["normalized_standard_deviation"].append(float(std_night))
 
-        data["angle"] = data["correlation_coefficient"] * 90
-        # data = pd.DataFrame(data)
-
-        from IPython.display import display
-
-        display(data)
+        data["angle"] = np.asarray(data["correlation_coefficient"]) * 90
+        data = pd.DataFrame(data)
 
         fig = px.scatter_polar(
             data,
             r="normalized_standard_deviation",
             theta="angle",
-            color="bias",
+            # color="bias",
             symbol="name",
             color_discrete_sequence=px.colors.sequential.Plasma_r,
             start_angle=90,
@@ -556,7 +552,7 @@ class GeneticAlgorithmViewer:
                 "name",
                 "correlation_coefficient",
                 "normalized_standard_deviation",
-                "bias",
+                # "bias",
                 "normalized_root_mean_square_error",
             ],
             title="Taylor diagram",
@@ -568,7 +564,7 @@ class GeneticAlgorithmViewer:
                 "<b>%{customdata[0]}</b><br><br>"
                 "Correlation: %{customdata[1]:.2f}<br>"
                 "Normalized STD: %{customdata[2]:.2f}<br>"
-                "Bias: %{customdata[3]:.2f}<br>"
+                # "Bias: %{customdata[3]:.2f}<br>"
                 "Normalized Bias: %{customdata[4]:.2f}<br>",
             ),
         )
@@ -617,4 +613,4 @@ class GeneticAlgorithmViewer:
             },
         )
 
-        fig.show()
+        return fig
