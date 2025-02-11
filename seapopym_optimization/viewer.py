@@ -497,6 +497,7 @@ class GeneticAlgorithmViewer:
 
         return all_figures
 
+    # TODO(Jules) : Be able to zoom correlation axis. Like corr_range=[0.7, 1]
     def taylor_diagram(
         self: GeneticAlgorithmViewer, nbest: int = 1, client=None, range_theta: Iterable[int] = [0, 90]
     ) -> go.Figure:
@@ -507,18 +508,20 @@ class GeneticAlgorithmViewer:
 
         data = {
             "name": [],
+            "color": [],
             "correlation_coefficient": [],
             "normalized_root_mean_square_error": [],
             "normalized_standard_deviation": [],
             # "bias": [],
         }
 
+        day_color = "firebrick"
+        night_color = "royalblue"
+
         for observation in self.observations:
             for individual in best_simulations["individual"].data:
                 # TODO(Jules): Add day / night as differents individuals
                 prediction = best_simulations.sel(individual=individual)
-                data["name"].append(f"{observation.name} x Individual {individual} x Day")
-                data["name"].append(f"{observation.name} x Individual {individual} x Night")
 
                 corr_day, corr_night = observation.correlation_coefficient(prediction, day_layer, night_layer)
                 mse_day, mse_night = observation.mean_square_error(
@@ -526,12 +529,17 @@ class GeneticAlgorithmViewer:
                 )
                 std_day, std_night = observation.normalized_standard_deviation(prediction, day_layer, night_layer)
                 # bias = observation.bias(prediction, day_layer, night_layer, standardize=True)
-
+                # DAY
+                data["name"].append(f"{observation.name} x Individual {individual} x Day")
+                data["color"].append(day_color)
                 data["correlation_coefficient"].append(float(corr_day))
-                data["correlation_coefficient"].append(float(corr_night))
                 data["normalized_root_mean_square_error"].append(float(mse_day))
-                data["normalized_root_mean_square_error"].append(float(mse_night))
                 data["normalized_standard_deviation"].append(float(std_day))
+                # NIGHT
+                data["name"].append(f"{observation.name} x Individual {individual} x Night")
+                data["color"].append(night_color)
+                data["correlation_coefficient"].append(float(corr_night))
+                data["normalized_root_mean_square_error"].append(float(mse_night))
                 data["normalized_standard_deviation"].append(float(std_night))
 
         data["angle"] = np.asarray(data["correlation_coefficient"]) * 90
@@ -541,9 +549,9 @@ class GeneticAlgorithmViewer:
             data,
             r="normalized_standard_deviation",
             theta="angle",
-            # color="bias",
+            color="color",
             symbol="name",
-            color_discrete_sequence=px.colors.sequential.Plasma_r,
+            # color_discrete_sequence=px.colors.sequential.Plasma_r,
             start_angle=90,
             range_theta=range_theta,
             direction="clockwise",  # Change direction to clockwise
@@ -559,7 +567,13 @@ class GeneticAlgorithmViewer:
         )
 
         fig.update_traces(
-            marker={"size": 10},
+            marker={
+                "size": 10,
+                # add contour line around markers
+                "line": {"color": "black", "width": 1},
+                # change opacity
+                "opacity": 0.8,
+            },
             hovertemplate=(
                 "<b>%{customdata[0]}</b><br><br>"
                 "Correlation: %{customdata[1]:.2f}<br>"
