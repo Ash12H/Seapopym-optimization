@@ -280,7 +280,7 @@ class GeneticAlgorithmViewer:
             )
 
             fig.update_layout(
-                coloraxis_colorbar={"title": "Fitness"},
+                coloraxis_colorbar={"title": "Fitness (uniforme distribution)" if uniformed else "Cost function score"},
                 title_text=f"Parameters optimization : minimization of the cost function for group {parameter_groups.index(group) + 1}",
             )
             figures.append(fig)
