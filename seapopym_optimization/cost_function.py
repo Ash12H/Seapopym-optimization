@@ -124,7 +124,7 @@ class Observation:
         centered: bool = False,
         root: bool = False,
         normalized: bool = False,
-    ) -> Sequence[float]:
+    ) -> tuple[float | None, float | None]:
         """
         Return the mean square error of the predicted and observed biomass.
 
@@ -140,7 +140,7 @@ class Observation:
             If True, return the Centered (unbiased) root mean square error (CRMSE).
         root : bool
             If True, the square root of the mean square error is returned.
-        standardize : bool
+        normalized : bool
             If True, the mean square error is divided by the standard deviation of the observation.
 
         """
@@ -164,14 +164,15 @@ class Observation:
             # WARNING(Jules): What is happening if there are several layers? Should we sum the cost?
             return cost
 
-        cost = []
+        cost_day = None
+        cost_night = None
         aggregated_prediction = self._helper_day_night_apply(predicted, day_layer, night_layer)
         if "day" in self.observation:
-            cost.append(_mse(pred=aggregated_prediction["day"], obs=self.observation["day"]))
+            cost_day = _mse(pred=aggregated_prediction["day"], obs=self.observation["day"])
         if "night" in self.observation:
-            cost.append(_mse(pred=aggregated_prediction["night"], obs=self.observation["night"]))
+            cost_night = _mse(pred=aggregated_prediction["night"], obs=self.observation["night"])
 
-        return cost
+        return cost_day, cost_night
 
     # TODO(Jules): Add correlation_coefficient, normalized_standard_deviation, bias
 
@@ -182,9 +183,11 @@ class Observation:
         night_layer: Sequence[int],
         *,
         corr_dim: str = "time",
-    ) -> None:
+    ) -> tuple[float | None, float | None]:
         """Return the correlation coefficient of the predicted and observed biomass."""
         aggregated_prediction = self._helper_day_night_apply(predicted, day_layer, night_layer)
+        correlation_day = None
+        correlation_night = None
         if "day" in self.observation:
             correlation_day = xr.corr(aggregated_prediction["day"], self.observation["day"], dim=corr_dim)
         if "night" in self.observation:
@@ -193,9 +196,11 @@ class Observation:
 
     def normalized_standard_deviation(
         self: Observation, predicted: xr.Dataset, day_layer: Sequence[int], night_layer: Sequence[int]
-    ) -> None:
+    ) -> tuple[float | None, float | None]:
         """Return the normalized standard deviation of the predicted and observed biomass."""
         aggregated_prediction = self._helper_day_night_apply(predicted, day_layer, night_layer)
+        normalized_standard_deviation_day = None
+        normalized_standard_deviation_night = None
         if "day" in self.observation:
             normalized_standard_deviation_day = aggregated_prediction["day"].std() / self.observation["day"].std()
         if "night" in self.observation:
@@ -317,7 +322,7 @@ class NoTransportCostFunction(GenericCostFunction):
                     night_layer=night_layers,
                     centered=self.centered_mse,
                     root=self.root_mse,
-                    standardize=self.normalized_mse,
+                    normalized=self.normalized_mse,
                 )
             )
             for obs in observations

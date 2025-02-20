@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Iterable, Sequence
+from typing import TYPE_CHECKING, Iterable, Literal, Sequence
 
 import numpy as np
 import pandas as pd
@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
     from seapopym_optimization.cost_function import Observation
     from seapopym_optimization.functional_groups import AllGroups
+from sklearn.preprocessing import QuantileTransformer
 
 
 def _compute_stats(logbook: pd.DataFrame) -> pd.DataFrame:
@@ -78,7 +79,9 @@ class GeneticAlgorithmViewer:
     def hall_of_fame(self: GeneticAlgorithmViewer) -> pd.DataFrame:
         """The best individuals and their fitness."""
         logbook = self.logbook
+        # In case of constraint violation:
         condition_not_inf = np.isfinite(logbook["fitness"])
+        # Avoid to take the same individual:
         condition_not_already_calculated = ~logbook.index.get_level_values("previous_generation")
         condition = condition_not_inf & condition_not_already_calculated
         previous_generation_level = 1
@@ -215,22 +218,26 @@ class GeneticAlgorithmViewer:
         self: GeneticAlgorithmViewer,
         *,
         nbest: int | None = None,
+        uniformed: bool = False,
         parameter_groups: list[list[str]] | None = None,
         colorscale: list | str | None = None,
         unselected_opacity: float = 0.2,
     ) -> list[Figure]:
-        """Print the `nhead` best individuals in the hall_of_fame as parallel coordinates plots for each parameter group."""
+        """
+        Print the `nhead` best individuals in the hall_of_fame as parallel coordinates plots for each parameter
+        group.
+        """
         if colorscale is None:
-            colorscale = [
-                [0, "rgba(0, 0, 255, 0.8)"],
-                [0.3, "rgba(255,255,0,0.5)"],
-                [1.0, "rgba(255,255,0,0.0)"],
-            ]
+            colorscale = px.colors.diverging.Portland
 
         hof_fitness = self.hall_of_fame
 
         if nbest is not None:
             hof_fitness = hof_fitness.iloc[:nbest]
+
+        if uniformed:
+            transformer = QuantileTransformer(output_distribution="uniform")
+            hof_fitness["fitness"] = transformer.fit_transform(hof_fitness[["fitness"]])
 
         if parameter_groups is None:
             parameter_groups = [self.parameters_names]
@@ -318,7 +325,12 @@ class GeneticAlgorithmViewer:
         )
         return fig
 
-    def parameters_scatter_matrix(self: GeneticAlgorithmViewer, nbest: int | None = None, **kwargs: dict) -> go.Figure:
+    def parameters_scatter_matrix(
+        self: GeneticAlgorithmViewer,
+        nbest: int | None = None,
+        size: int = 1000,
+        **kwargs: dict,
+    ) -> go.Figure:
         """
         Print the scatter matrix of the parameters.
         Usefull to explore wich combination of parameters are used and if the distribution is correct.
@@ -330,8 +342,8 @@ class GeneticAlgorithmViewer:
         fig = px.scatter_matrix(
             data,
             dimensions=data.columns[:-1],
-            height=1500,
-            width=1500,
+            height=size,
+            width=size,
             color="fitness",
             color_continuous_scale=[
                 (0, "rgba(0,0,255,1)"),
@@ -374,7 +386,7 @@ class GeneticAlgorithmViewer:
             y=param_names,
         )
         fig.update_layout(
-            title="Correlation Matrix of Hall of Fame Parameters (Lower Triangle)",
+            title=f"Correlation Matrix of {nbest} individuals",
             plot_bgcolor="rgba(0,0,0,0)",
             paper_bgcolor="rgba(0,0,0,0)",
             xaxis={"showgrid": False, "tickangle": -35},
@@ -532,18 +544,18 @@ class GeneticAlgorithmViewer:
                 # DAY
                 data["name"].append(f"{observation.name} x Individual {individual} x Day")
                 data["color"].append(day_color)
-                data["correlation_coefficient"].append(float(corr_day))
-                data["normalized_root_mean_square_error"].append(float(mse_day))
-                data["normalized_standard_deviation"].append(float(std_day))
+                data["correlation_coefficient"].append(np.float64(corr_day))
+                data["normalized_root_mean_square_error"].append(np.float64(mse_day))
+                data["normalized_standard_deviation"].append(np.float64(std_day))
                 # NIGHT
                 data["name"].append(f"{observation.name} x Individual {individual} x Night")
                 data["color"].append(night_color)
-                data["correlation_coefficient"].append(float(corr_night))
-                data["normalized_root_mean_square_error"].append(float(mse_night))
-                data["normalized_standard_deviation"].append(float(std_night))
+                data["correlation_coefficient"].append(np.float64(corr_night))
+                data["normalized_root_mean_square_error"].append(np.float64(mse_night))
+                data["normalized_standard_deviation"].append(np.float64(std_night))
 
         data["angle"] = np.asarray(data["correlation_coefficient"]) * 90
-        data = pd.DataFrame(data)
+        data = pd.DataFrame(data).dropna(axis=0)
 
         fig = px.scatter_polar(
             data,
