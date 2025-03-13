@@ -26,6 +26,7 @@ copernicusmarine = "^2.0.0"
 ipywidgets = "^8.1.5"
 scikit-learn = "^1.6.1"
 sympy = "^1.13.3"
+pyarrow = "^19.0.1"
 
 
 [tool.poetry.group.extra.dependencies]
