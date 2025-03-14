@@ -1,0 +1,168 @@
+{
+    "metadata": {
+        ".zattrs": {
+            "Conventions": "CF-1.11",
+            "history": "Created on 2024-09-6",
+            "institution": "CLS",
+            "references": "http://www.cls.fr; http://www.seapodym.eu",
+            "source": "SEAPODYM-LMTL 3.0.0",
+            "subset:datasetId": "cmems_mod_glo_bgc_my_0.083deg-lmtl-Fphy_PT1D-i_202411",
+            "subset:date": "2025-03-14T12:07:51.550Z",
+            "subset:productId": "GLOBAL_MULTIYEAR_BGC_001_033",
+            "subset:source": "ARCO data downloaded from the Marine Data Store using the MyOcean Data Portal",
+            "title": "Physical forcings of global ocean low and mid trophic levels biomass content hindcast"
+        },
+        ".zgroup": {
+            "zarr_format": 2
+        },
+        "T/.zarray": {
+            "chunks": [
+                1,
+                1,
+                9496
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f4",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                1,
+                1,
+                9496
+            ],
+            "zarr_format": 2
+        },
+        "T/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "longitude",
+                "latitude",
+                "time"
+            ],
+            "long_name": "Sea water potential temperature vertical mean over pelagic layer",
+            "standard_name": "sea_water_potential_temperature_vertical_mean_over_pelagic_layer",
+            "units": "Celsius degree"
+        },
+        "latitude/.zarray": {
+            "chunks": [
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f8",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                1
+            ],
+            "zarr_format": 2
+        },
+        "latitude/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "latitude"
+            ]
+        },
+        "longitude/.zarray": {
+            "chunks": [
+                1
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f8",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                1
+            ],
+            "zarr_format": 2
+        },
+        "longitude/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "longitude"
+            ]
+        },
+        "npp/.zarray": {
+            "chunks": [
+                1,
+                1,
+                9496
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f4",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                1,
+                1,
+                9496
+            ],
+            "zarr_format": 2
+        },
+        "npp/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "longitude",
+                "latitude",
+                "time"
+            ],
+            "long_name": "Net primary productivity of biomass expressed as carbon in sea water",
+            "standard_name": "net_primary_productivity_of_biomass_expressed_as_carbon_in_sea_water",
+            "units": "mg m-2 day-1"
+        },
+        "time/.zarray": {
+            "chunks": [
+                9496
+            ],
+            "compressor": {
+                "blocksize": 0,
+                "clevel": 5,
+                "cname": "lz4",
+                "id": "blosc",
+                "shuffle": 1
+            },
+            "dtype": "<f8",
+            "fill_value": "NaN",
+            "filters": null,
+            "order": "C",
+            "shape": [
+                9496
+            ],
+            "zarr_format": 2
+        },
+        "time/.zattrs": {
+            "_ARRAY_DIMENSIONS": [
+                "time"
+            ],
+            "axis": "T",
+            "calendar": "gregorian",
+            "long_name": "Time",
+            "standard_name": "time",
+            "units": "seconds since 1970-01-01"
+        }
+    },
+    "zarr_consolidated_format": 1
+}
