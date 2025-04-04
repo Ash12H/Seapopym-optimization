@@ -1,9 +1,0 @@
-{
-    "_ARRAY_DIMENSIONS": [
-        "latitude",
-        "longitude",
-        "time"
-    ],
-    "standard_name": "mass_content_of_zooplankton_expressed_as_carbon_in_sea_water",
-    "units": "g m-2"
-}

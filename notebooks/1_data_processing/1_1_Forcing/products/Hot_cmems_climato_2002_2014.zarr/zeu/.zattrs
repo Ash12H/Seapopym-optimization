@@ -1,9 +1,0 @@
-{
-    "_ARRAY_DIMENSIONS": [
-        "latitude",
-        "longitude",
-        "time"
-    ],
-    "standard_name": "euphotic_zone_depth",
-    "units": "m"
-}

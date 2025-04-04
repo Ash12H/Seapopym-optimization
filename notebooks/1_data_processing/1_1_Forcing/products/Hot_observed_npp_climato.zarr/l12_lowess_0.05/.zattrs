@@ -1,8 +1,0 @@
-{
-    "_ARRAY_DIMENSIONS": [
-        "time",
-        "latitude",
-        "longitude"
-    ],
-    "desc": "L12 multiplied by ZEU (from CMEMS) smoothed with lowess filter with frac=0.05."
-}
