@@ -11,6 +11,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import xarray as xr
 from plotly.subplots import make_subplots
+from scipy.stats import entropy
 
 from seapopym_optimization import wrapper
 
@@ -324,6 +325,42 @@ class GeneticAlgorithmViewer:
             showlegend=False,
         )
         return fig
+
+    def shannon_entropy(self: GeneticAlgorithmViewer, *, bins: int = 10) -> go.Figure:
+        """Proche de 0 = distribution similaires."""
+
+        def compute_shannon_entropy(p: np.ndarray) -> float:
+            """Close to 0 = similar distribution."""
+            hist_p, _ = np.histogram(p, bins=bins, density=True)
+            hist_p += 1e-10
+            return entropy(hist_p / np.sum(hist_p))
+
+        data = self.logbook.reset_index()
+
+        entropies = {}
+        for generation in data["generation"].unique():
+            data_gen = data[data["generation"] == generation]
+            gen_entropy = {k: compute_shannon_entropy(v) for k, v in data_gen.items() if k in self.parameters_names}
+            entropies[generation] = gen_entropy
+
+        entropies = pd.DataFrame(entropies).T
+
+        entropies = (
+            entropies.unstack()
+            .reset_index()
+            .rename(columns={"level_1": "Generation", "level_0": "Variable", 0: "Entropy"})
+        )
+
+        return px.area(
+            entropies,
+            x="Generation",
+            y="Entropy",
+            color="Variable",
+            line_group="Variable",
+            title="Shannon entropy of parameter distributions",
+            labels={"index": "Generation", "value": "Shannon entropy"},
+            markers=True,
+        ).update_layout(xaxis_showgrid=False, yaxis_showgrid=False, plot_bgcolor="rgba(0, 0, 0, 0)")
 
     def parameters_scatter_matrix(
         self: GeneticAlgorithmViewer,
