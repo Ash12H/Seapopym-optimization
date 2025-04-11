@@ -19,7 +19,9 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
 NO_TRANSPORT_DAY_LAYER_POS = 0
+"""Position of the day layer in the parameters array."""
 NO_TRANSPORT_NIGHT_LAYER_POS = 1
+"""Position of the night layer in the parameters array."""
 
 
 @dataclass

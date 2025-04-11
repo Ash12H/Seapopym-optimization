@@ -31,7 +31,14 @@ MAXIMUM_INIT_TRY = 1000
 
 @dataclass
 class Observation:
-    """The structure used to store the observation and compute the difference with the predicted data."""
+    """
+    The structure used to store the observation and compute the difference with the predicted data.
+
+    Warning:
+    -------
+    Time sampling must be one of : 1D, 1W or 1ME according to pandas resample function.
+
+    """
 
     name: str
     observation: xr.Dataset
@@ -164,8 +171,8 @@ class Observation:
             # WARNING(Jules): What is happening if there are several layers? Should we sum the cost?
             return cost
 
-        cost_day = None
-        cost_night = None
+        cost_day = 0
+        cost_night = 0
         aggregated_prediction = self._helper_day_night_apply(predicted, day_layer, night_layer)
         if "day" in self.observation:
             cost_day = _mse(pred=aggregated_prediction["day"], obs=self.observation["day"])
