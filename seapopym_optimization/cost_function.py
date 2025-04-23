@@ -13,6 +13,8 @@ import numpy as np
 import pint  # noqa: F401
 import pint_xarray  # noqa: F401
 import xarray as xr
+from seapopym.configuration.no_transport.configuration import KernelParameters
+from seapopym.configuration.parameters.parameter_environment import EnvironmentParameter
 
 from seapopym_optimization.functional_groups import AllGroups, FunctionalGroupOptimizeNoTransport
 from seapopym_optimization.wrapper import (
@@ -69,8 +71,8 @@ class Observation:
                 )
         except Exception as e:
             msg = (
-                f"At least one variable is not convertible to {BIOMASS_UNITS}, which is the unit of the predicted ",
-                "biomass.",
+                f"At least one variable is not convertible to {BIOMASS_UNITS}, which is the unit of the predicted "
+                "biomass."
             )
             raise ValueError(msg) from e
 
@@ -100,11 +102,11 @@ class Observation:
     def _helper_resample_data_by_time_type(self: Observation, data: xr.DataArray) -> xr.DataArray:
         """Resample the data according to the observation type."""
         if self.observation_type == "daily":
-            return data.cf.resample(T="1D").mean().cf.dropna("T")
+            return data.cf.resample(T="1D").mean().cf.dropna("T", how="all")
         if self.observation_type == "monthly":
-            return data.cf.resample(T="1ME").mean().cf.dropna("T")
+            return data.cf.resample(T="1ME").mean().cf.dropna("T", how="all")
         if self.observation_type == "weekly":
-            return data.cf.resample(T="1W").mean().cf.dropna("T")
+            return data.cf.resample(T="1W").mean().cf.dropna("T", how="all")
 
         msg = "The observation type must be 'daily', 'monthly', or 'weekly'. Default is 'daily'."
         raise ValueError(msg)
@@ -181,8 +183,6 @@ class Observation:
 
         return cost_day, cost_night
 
-    # TODO(Jules): Add correlation_coefficient, normalized_standard_deviation, bias
-
     def correlation_coefficient(
         self: Observation,
         predicted: xr.Dataset,
@@ -214,6 +214,7 @@ class Observation:
             normalized_standard_deviation_night = aggregated_prediction["night"].std() / self.observation["night"].std()
         return normalized_standard_deviation_day, normalized_standard_deviation_night
 
+    # TODO(Jules): Add bias
     def bias(self: Observation, predicted: xr.Dataset, day_layer: Sequence[int], night_layer: Sequence[int]) -> None:
         """Return the bias of the predicted and observed biomass."""
         raise NotImplementedError("The bias is not implemented yet.")
@@ -289,8 +290,8 @@ class NoTransportCostFunction(GenericCostFunction):
 
     """
 
-    kwargs: dict | None = None
-    # TODO(Jules): Replace kwargs by the NoTransport configuration structure -> Env and Kernel
+    environment_parameters: EnvironmentParameter | None = None
+    kernel_parameters: KernelParameters | None = None
     centered_mse: bool = False
     root_mse: bool = True
     normalized_mse: bool = True
@@ -298,15 +299,14 @@ class NoTransportCostFunction(GenericCostFunction):
     def __post_init__(self: NoTransportCostFunction) -> None:
         """Check that the kwargs are set."""
         super().__post_init__()
-        if self.kwargs is None:
-            self.kwargs = {}
 
     def _cost_function(
         self: NoTransportCostFunction,
         args: np.ndarray,
         forcing_parameters: ForcingParameters,
         observations: Sequence[Observation],
-        **kwargs: dict,
+        environment_parameters: EnvironmentParameter | None = None,
+        kernel_parameters: KernelParameters | None = None,
     ) -> tuple:
         groups_name = self.functional_groups.functional_groups_name
         filled_args = self.functional_groups.generate_matrix(args)
@@ -315,11 +315,16 @@ class NoTransportCostFunction(GenericCostFunction):
 
         fg_parameters = FunctionalGroupGeneratorNoTransport(filled_args, groups_name)
 
-        model = model_generator_no_transport(forcing_parameters, fg_parameters, **kwargs)
+        model = model_generator_no_transport(
+            forcing_parameters,
+            fg_parameters,
+            environment_parameters=environment_parameters,
+            kernel_parameters=kernel_parameters,
+        )
 
         model.run()
 
-        predicted_biomass = model.export_biomass().load()
+        predicted_biomass = model.export_biomass()
 
         return tuple(
             sum(

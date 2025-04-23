@@ -6,8 +6,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
-from seapopym.configuration.no_transport.configuration import NoTransportConfiguration
+from seapopym.configuration.no_transport.configuration import KernelParameters, NoTransportConfiguration
 from seapopym.configuration.no_transport.parameter import ForcingParameters, FunctionalGroups, NoTransportParameters
+from seapopym.configuration.parameters.parameter_environment import EnvironmentParameter
 from seapopym.configuration.parameters.parameter_functional_group import (
     FunctionalGroupUnit,
     FunctionalGroupUnitMigratoryParameters,
@@ -66,7 +67,7 @@ class FunctionalGroupGeneratorNoTransport:
             raise ValueError(msg)
 
         if self.groups_name is None:
-            self.groups_name = [f"D{day_layer}N{night_layer}" for day_layer, night_layer in self.parameters[:, 4:6]]
+            self.groups_name = [f"D{day_layer}N{night_layer}" for day_layer, night_layer in self.parameters[:, :2]]
         elif len(self.groups_name) != self.parameters.shape[0]:
             msg = "The number of names must be the same as the number of functional groups"
             raise ValueError(msg)
@@ -116,18 +117,24 @@ class FunctionalGroupGeneratorNoTransport:
         return FunctionalGroups(functional_groups=fgroups)
 
 
-# TODO(Jules) : Est-ce qu'on peut envelopper cette fonctionnalité ? Comme un wrapper de classe qui retourne un model
-# Seapopym.
 def model_generator_no_transport(
-    forcing_parameters: ForcingParameters, fg_parameters: FunctionalGroupGeneratorNoTransport, **kwargs: dict
+    forcing_parameters: ForcingParameters,
+    fg_parameters: FunctionalGroupGeneratorNoTransport,
+    environment_parameters: EnvironmentParameter = None,
+    kernel_parameters: KernelParameters = None,
 ) -> NoTransportModel:
     """Generate a NoTransportModel object with the given parameters."""
+    if environment_parameters is None:
+        environment_parameters = EnvironmentParameter()
+    if kernel_parameters is None:
+        kernel_parameters = KernelParameters()
     return NoTransportModel(
         configuration=NoTransportConfiguration(
             parameters=NoTransportParameters(
                 forcing_parameters=forcing_parameters,
                 functional_groups_parameters=fg_parameters.generate(),
-                **kwargs,
+                environment_parameters=environment_parameters,
+                kernel_parameters=kernel_parameters,
             )
         )
     )

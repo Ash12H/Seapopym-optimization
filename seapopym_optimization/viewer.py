@@ -433,7 +433,7 @@ class GeneticAlgorithmViewer:
 
     def time_series(
         self: GeneticAlgorithmViewer, nbest: int, title: Iterable[str] | None = None, client=None
-    ) -> go.Figure:
+    ) -> list[go.Figure]:
         def _plot_observation(observation: xr.DataArray, day_cycle: str, layer: int) -> go.Scatter:
             y = observation.sel(layer=layer)
             x = y.cf["T"]
@@ -517,7 +517,7 @@ class GeneticAlgorithmViewer:
                 vertical_spacing=0.1,
             )
             obs_data: xr.Dataset = observation.observation.pint.quantify().pint.to("milligram / meter ** 2")
-            best_simulations = best_simulations.cf.sel(X=obs_data.cf["X"], Y=obs_data.cf["Y"]).cf.mean(["X", "Y"])
+            best_simulations_sel = best_simulations.cf.sel(X=obs_data.cf["X"], Y=obs_data.cf["Y"]).cf.mean(["X", "Y"])
             obs_data = obs_data.cf.mean(["X", "Y"])
 
             for column, day_cycle in enumerate(["day", "night"]):
@@ -529,10 +529,10 @@ class GeneticAlgorithmViewer:
                         fgroup = _compute_fgroup_in_layer(day_cycle, layer)
                         if len(fgroup) > 0:
                             figure.add_trace(
-                                _plot_best_prediction(best_simulations, fgroup, day_cycle, layer), row=row, col=col
+                                _plot_best_prediction(best_simulations_sel, fgroup, day_cycle, layer), row=row, col=col
                             )
                             figure.add_trace(
-                                _plot_range_best_predictions(best_simulations, fgroup, nbest, day_cycle, layer),
+                                _plot_range_best_predictions(best_simulations_sel, fgroup, nbest, day_cycle, layer),
                                 row=row,
                                 col=col,
                             )
