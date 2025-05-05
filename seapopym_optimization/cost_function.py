@@ -22,11 +22,13 @@ from seapopym_optimization.wrapper import (
     NO_TRANSPORT_NIGHT_LAYER_POS,
     FunctionalGroupGeneratorNoTransport,
     model_generator_no_transport,
+    FunctionalGroupGeneratorAcidity,
+    model_generator_acidity,
 )
 
 if TYPE_CHECKING:
     from seapopym.configuration.no_transport.parameter import ForcingParameters
-
+    from seapopym.configuration.acidity.acidity_configuration import AcidityForcingParameters
 BIOMASS_UNITS = "g/m2"
 MAXIMUM_INIT_TRY = 1000
 
@@ -316,6 +318,72 @@ class NoTransportCostFunction(GenericCostFunction):
         fg_parameters = FunctionalGroupGeneratorNoTransport(filled_args, groups_name)
 
         model = model_generator_no_transport(
+            forcing_parameters,
+            fg_parameters,
+            environment_parameters=environment_parameters,
+            kernel_parameters=kernel_parameters,
+        )
+
+        model.run()
+
+        predicted_biomass = model.export_biomass()
+
+        return tuple(
+            sum(
+                obs.mean_square_error(
+                    predicted=predicted_biomass,
+                    day_layer=day_layers,
+                    night_layer=night_layers,
+                    centered=self.centered_mse,
+                    root=self.root_mse,
+                    normalized=self.normalized_mse,
+                )
+            )
+            for obs in observations
+        )
+
+@dataclass
+class AcidityCostFunction(GenericCostFunction):
+    """
+    Generator of the cost function for the 'SeapoPym Acidity' model.
+
+    Attributes
+    ----------
+    functional_groups: Sequence[FunctionalGroupOptimizeAcidity]
+        The list of functional groups.
+    forcing_parameters : AcidityForcingParameters
+        Forcing parameters.
+    observations : Sequence[Observation]
+        Observations.
+
+    """
+
+    environment_parameters: EnvironmentParameter | None = None
+    kernel_parameters: KernelParameters | None = None
+    centered_mse: bool = False
+    root_mse: bool = True
+    normalized_mse: bool = True
+
+    def __post_init__(self: AcidityCostFunction) -> None:
+        """Check that the kwargs are set."""
+        super().__post_init__()
+
+    def _cost_function(
+        self: AcidityCostFunction,
+        args: np.ndarray,
+        forcing_parameters: AcidityForcingParameters,
+        observations: Sequence[Observation],
+        environment_parameters: EnvironmentParameter | None = None,
+        kernel_parameters: KernelParameters | None = None,
+    ) -> tuple:
+        groups_name = self.functional_groups.functional_groups_name
+        filled_args = self.functional_groups.generate_matrix(args)
+        day_layers = filled_args[:, NO_TRANSPORT_DAY_LAYER_POS].flatten()
+        night_layers = filled_args[:, NO_TRANSPORT_NIGHT_LAYER_POS].flatten()
+
+        fg_parameters = FunctionalGroupGeneratorAcidity(filled_args, groups_name)
+
+        model = model_generator_acidity(
             forcing_parameters,
             fg_parameters,
             environment_parameters=environment_parameters,

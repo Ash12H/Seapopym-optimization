@@ -100,6 +100,19 @@ class GeneticAlgorithmViewer:
 
         original_model.run()
         return original_model.export_biomass()
+    
+    @property
+    def original_simulation_acidity(self: GeneticAlgorithmViewer) -> xr.Dataset:
+        original_config = [[0, 0, 0.01668, 41.61, -0.085, 0.04, 0.004, 2.4, -0.58]]
+        original_model = wrapper.model_generator_acidity(
+            forcing_parameters=self.forcing_parameters,
+            fg_parameters=wrapper.FunctionalGroupGeneratorAcidity(
+                parameters=original_config, groups_name=["Total"]
+            ),
+        )
+
+        original_model.run()
+        return original_model.export_biomass()
 
     @property
     def best_simulation(self: GeneticAlgorithmViewer) -> xr.Dataset:
@@ -127,16 +140,39 @@ class GeneticAlgorithmViewer:
                 )
             )
 
+        # def run_simulation(individual: tuple[int, np.ndarray]):
+        #     """Take an individual as (number, parameters) and run the simulation."""
+        #     model = wrapper.model_generator_no_transport(
+        #         forcing_parameters=self.forcing_parameters,
+        #         fg_parameters=wrapper.FunctionalGroupGeneratorNoTransport(
+        #             parameters=individual[1], groups_name=self.parameters.functional_groups_name
+        #         ),
+        #     )
+        #     model.run()
+        #     return model.export_biomass().expand_dims({"individual": [individual[0]]})
+
         def run_simulation(individual: tuple[int, np.ndarray]):
-            """Take an individual as (number, parameters) and run the simulation."""
-            model = wrapper.model_generator_no_transport(
-                forcing_parameters=self.forcing_parameters,
-                fg_parameters=wrapper.FunctionalGroupGeneratorNoTransport(
-                    parameters=individual[1], groups_name=self.parameters.functional_groups_name
-                ),
-            )
-            model.run()
-            return model.export_biomass().expand_dims({"individual": [individual[0]]})
+            """Take an individual as (number, parameters) and run the simulation, either a NoTransport Simulation or an Acidity one"""
+            if individual[1].shape[1]==7: # NoTransport model, 7 params to optimise
+                model = wrapper.model_generator_no_transport(
+                    forcing_parameters=self.forcing_parameters,
+                    fg_parameters=wrapper.FunctionalGroupGeneratorNoTransport(
+                        parameters=individual[1], groups_name=self.parameters.functional_groups_name
+                    ),
+                )
+                model.run()
+                return model.export_biomass().expand_dims({"individual": [individual[0]]}) 
+            elif individual[1].shape[1]==9: # Acidity model, 9 params to optimise
+                model = wrapper.model_generator_acidity(
+                    forcing_parameters=self.forcing_parameters,
+                    fg_parameters=wrapper.FunctionalGroupGeneratorAcidity(
+                        parameters=individual[1], groups_name=self.parameters.functional_groups_name
+                    ),
+                )
+                model.run()
+                return model.export_biomass().expand_dims({"individual": [individual[0]]})  
+            else:
+                raise ValueError("Unexpected number of parameters. NoTransport model expect 7 parameters, Acidity model expect 9 parameters.")     
 
         if client is None:
             biomass_accumulated = [run_simulation(individual) for individual in individuals_parameterization]

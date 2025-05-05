@@ -102,6 +102,20 @@ class FunctionalGroupOptimizeNoTransport(GenericFunctionalGroupOptimize):
     inv_lambda_max: float | Parameter
     inv_lambda_rate: float | Parameter
 
+@dataclass
+class FunctionalGroupOptimizeAcidity(GenericFunctionalGroupOptimize):
+    """The parameters of a functional group as they are defined in the SeapoPym Acidity model."""
+
+    # NOTE(Jules): Be sure that you respect the order of the parameters as defined in the wrapper module.
+    day_layer: float | Parameter
+    night_layer: float | Parameter
+    energy_coefficient: float | Parameter
+    tr_max: float | Parameter
+    tr_rate: float | Parameter
+    lambda_T_max: float | Parameter
+    lambda_T_rate: float | Parameter
+    lambda_pH_max: float | Parameter
+    lambda_pH_rate: float | Parameter
 
 @dataclass
 class AllGroups:

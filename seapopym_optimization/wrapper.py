@@ -16,6 +16,9 @@ from seapopym.configuration.parameters.parameter_functional_group import (
 )
 from seapopym.model.no_transport_model import NoTransportModel
 
+from seapopym.configuration.acidity.acidity_configuration import AcidityForcingParameters, AcidityParameters, AcidityConfiguration
+from seapopym.model.acidity_model import AcidityModel
+
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
@@ -116,6 +119,102 @@ class FunctionalGroupGeneratorNoTransport:
 
         return FunctionalGroups(functional_groups=fgroups)
 
+@dataclass
+class FunctionalGroupGeneratorAcidity:
+    """
+    This class is a wrapper around the SeapoPym model to automatically create functional groups with the given
+    parameters. The parameters must be given as a 2D array with the shape (functional_group >=1, parameter == 9).
+
+    Parameters
+    ----------
+    parameters : np.ndarray
+        Axes: (functional_group >=1, parameter == 9). The parameters order is :
+        - day_layer
+        - night_layer
+        - energy_transfert
+        - tr_max
+        - tr_rate
+        - lambda_T_max
+        - lambda_T_rate
+        - lambda_pH_max
+        - lambda_pH_rate
+
+    """
+
+    parameters: np.ndarray
+    """
+    Axes: (functional_group, parameter). The parameters order is : day_layer, night_layer, energy_transfert, tr_max,
+    tr_rate, lambda_T_max, lambda_T_rate, lambda_pH_max, lambda_pH_rate
+    """
+    groups_name: list[str] = None
+
+    def __post_init__(self: FunctionalGroupGeneratorAcidity) -> None:
+        """Check the parameters and convert them to a numpy array."""
+        if not isinstance(self.parameters, np.ndarray):
+            self.parameters = np.array(self.parameters)
+        if self.parameters.ndim != 2:
+            msg = "The parameters must be a 2D array with the shape (functional_group of shape X, parameter of shape 9)"
+            raise ValueError(msg)
+        if self.parameters.shape[1] != 9:
+            msg = (
+                "The number of parameters must be 9 : day_layer, night_layer, energy_transfert, tr_max, tr_rate,"
+                "lambda_T_max, lambda_T_rate, lambda_pH_max, lambda_pH_rate",
+            )
+            raise ValueError(msg)
+
+        if self.groups_name is None:
+            self.groups_name = [f"D{day_layer}N{night_layer}" for day_layer, night_layer in self.parameters[:, :2]]
+        elif len(self.groups_name) != self.parameters.shape[0]:
+            msg = "The number of names must be the same as the number of functional groups"
+            raise ValueError(msg)
+
+    def _helper_functional_group_generator(
+        self: FunctionalGroupGeneratorAcidity,
+        fg_parameters: Iterable[int | float],
+        fg_name: str,
+    ) -> FunctionalGroupUnit:
+        """Create a single functional group with the given parameters."""
+        day_layer: float = fg_parameters[NO_TRANSPORT_DAY_LAYER_POS]
+        night_layer: float = fg_parameters[NO_TRANSPORT_NIGHT_LAYER_POS]
+        energy_transfert: float = fg_parameters[2]
+        tr_max: float = fg_parameters[3]
+        tr_rate: float = fg_parameters[4]
+        lambda_T_max: float = fg_parameters[5]
+        lambda_T_rate: float = fg_parameters[6]
+        lambda_pH_max: float = fg_parameters[7]
+        lambda_pH_rate: float = fg_parameters[8]
+
+        return FunctionalGroupUnit(
+            name=fg_name,
+            migratory_type=FunctionalGroupUnitMigratoryParameters(day_layer=day_layer, night_layer=night_layer),
+            functional_type=FunctionalGroupUnitRelationParameters(
+                lambda_T_max=lambda_T_max,
+                lambda_T_rate=lambda_T_rate,
+                lambda_pH_max=lambda_pH_max,
+                lambda_pH_rate=lambda_pH_rate,
+                temperature_recruitment_rate=tr_rate,
+                cohorts_timesteps=[1] * np.ceil(tr_max).astype(int),
+                temperature_recruitment_max=tr_max,
+            ),
+            energy_transfert=energy_transfert,
+        )
+
+    def generate(self: FunctionalGroupGeneratorAcidity) -> FunctionalGroups:
+        """
+        Generate a FunctionalGroups object with the given parameters. If the parameters are given as a single value,
+        only one functional group will be created with these parameters. If the parameters are given as an iterable,
+        the number of values must be the same for all the parameters.
+        """
+        nb_functional_groups = self.parameters.shape[0]
+        if nb_functional_groups == 1:
+            fgroups = [self._helper_functional_group_generator(self.parameters[0], self.groups_name[0])]
+        else:
+            fgroups = [
+                self._helper_functional_group_generator(self.parameters[i], self.groups_name[i])
+                for i in range(nb_functional_groups)
+            ]
+
+        return FunctionalGroups(functional_groups=fgroups)
 
 def model_generator_no_transport(
     forcing_parameters: ForcingParameters,
@@ -131,6 +230,28 @@ def model_generator_no_transport(
     return NoTransportModel(
         configuration=NoTransportConfiguration(
             parameters=NoTransportParameters(
+                forcing_parameters=forcing_parameters,
+                functional_groups_parameters=fg_parameters.generate(),
+                environment_parameters=environment_parameters,
+                kernel_parameters=kernel_parameters,
+            )
+        )
+    )
+
+def model_generator_acidity(
+    forcing_parameters: AcidityForcingParameters,
+    fg_parameters: FunctionalGroupGeneratorAcidity,
+    environment_parameters: EnvironmentParameter = None,
+    kernel_parameters: KernelParameters = None,
+) -> AcidityModel:
+    """Generate an AcidityModel object with the given parameters."""
+    if environment_parameters is None:
+        environment_parameters = EnvironmentParameter()
+    if kernel_parameters is None:
+        kernel_parameters = KernelParameters()
+    return AcidityModel(
+        configuration=AcidityConfiguration(
+            parameters=AcidityParameters(
                 forcing_parameters=forcing_parameters,
                 functional_groups_parameters=fg_parameters.generate(),
                 environment_parameters=environment_parameters,
