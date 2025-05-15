@@ -90,7 +90,8 @@ class GeneticAlgorithmViewer:
 
     @property
     def original_simulation(self: GeneticAlgorithmViewer) -> xr.Dataset:
-        original_config = [[0, 0, 0.1668, 10.38, -0.11, 150, -0.15]]
+        # original_config = [[0, 0, 0.1668, 10.38, -0.11, 150, -0.15]]
+        original_config = [[0, 0, 0.001668, 41.61, -0.085, 256.75, -0.092]]# pteropod original config
         original_model = wrapper.model_generator_no_transport(
             forcing_parameters=self.forcing_parameters,
             fg_parameters=wrapper.FunctionalGroupGeneratorNoTransport(

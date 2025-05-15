@@ -135,6 +135,8 @@ class Observation:
         centered: bool = False,
         root: bool = False,
         normalized: bool = False,
+        log_transform: bool =False,
+        eps: float = 1e-6,
     ) -> tuple[float | None, float | None]:
         """
         Return the mean square error of the predicted and observed biomass.
@@ -158,6 +160,9 @@ class Observation:
 
         def _mse(pred: xr.DataArray, obs: xr.DataArray) -> float:
             """Mean square error applied to xr.DataArray."""
+            if log_transform:
+                pred=np.log10(np.maximum(pred,eps)) # avoid log(0)
+                obs=np.log10(np.maximum(obs,eps))
             if centered:
                 cost = float(((pred - pred.mean()) - (obs - obs.mean())).mean() ** 2)
             else:
@@ -363,6 +368,7 @@ class AcidityCostFunction(GenericCostFunction):
     centered_mse: bool = False
     root_mse: bool = True
     normalized_mse: bool = True
+    log_transform_mse: bool =False
 
     def __post_init__(self: AcidityCostFunction) -> None:
         """Check that the kwargs are set."""
@@ -403,6 +409,7 @@ class AcidityCostFunction(GenericCostFunction):
                     centered=self.centered_mse,
                     root=self.root_mse,
                     normalized=self.normalized_mse,
+                    log_transform=self.log_transform_mse
                 )
             )
             for obs in observations
