@@ -10,9 +10,15 @@ from typing import TYPE_CHECKING, Callable, Iterable, Sequence
 import cf_xarray
 import cf_xarray.units  # noqa: F401
 import numpy as np
+import pandas as pd
 import pint  # noqa: F401
 import pint_xarray  # noqa: F401
 import xarray as xr
+np.int = int  # Patch temporaire pour compatibilité pygam
+from pygam import LinearGAM, s, l
+import scipy.sparse
+# Patch temporaire : ajoute un attribut `.A` à scipy.sparse matrices
+scipy.sparse.csr_matrix.A = property(lambda self: self.toarray())
 from seapopym.configuration.no_transport.kernel_parameter import KernelParameter
 from seapopym.configuration.no_transport.environment_parameter import EnvironmentParameter
 
@@ -416,3 +422,142 @@ class AcidityCostFunction(GenericCostFunction):
             )
             for obs in observations
         )
+    
+@dataclass
+class GAMPteropodCostFunction(GenericCostFunction):
+    """
+    Generator of the cost function for the 'SeapoPym Acidity' model.
+    Using GAM decomposition (trend/seasonality/residuals)
+
+    Attributes
+    ----------
+    functional_groups: Sequence[FunctionalGroupOptimizeAcidity]
+        The list of functional groups.
+    forcing_parameters : ForcingParameter
+        Forcing parameters.
+    observations : Sequence[Observation]
+        Observations.
+
+    Optional
+    --------
+    weights : list of float
+        relative weights in the cost function assigned to :
+        0 the trend
+        1 the seasonal component
+        default is [0.5,0.5]
+
+    WARNING : in this class, data is automaticaly log10 transfrom    
+
+    """
+
+    environment_parameters: EnvironmentParameter | None = None
+    kernel_parameters: KernelParameter | None = None
+    weights: list[float] = field(default_factory=lambda: [0.5,0.5])
+
+    def __post_init__(self: GAMPteropodCostFunction) -> None:
+        """Check that the kwargs are set."""
+        super().__post_init__()
+
+    def decompose_GAM(self,data,variable,eps: float = 1e-6):
+        """Decompose time series using GAM model into trend and seasonality, 
+        all the calculations are in the log10 base
+        
+        Parameters:
+             data (dataframe): must contain 'time' and the target variable to decompose
+             variable (str) : name of the variable in the model
+             eps (float): small value to avoid log(0)
+        Returns:
+            (trend_df,season_df):DataFrame with 'time' and 'biomass' columns
+        
+        """
+        data=data.copy()
+        data[variable]=np.log10(np.maximum(data[variable],eps)) # log10 transformation, epsilon to avoid log(0) 
+
+        data = data.dropna().reset_index(drop=True)
+        data['time_float'] = (data['time'] - data['time'].min()).dt.total_seconds() / (3600 * 24)
+
+        data['month'] = data['time'].dt.month
+        data['month_sin'] = np.sin(2 * np.pi * (data['month'] - 1) / 12)
+        data['month_cos'] = np.cos(2 * np.pi * (data['month'] - 1) / 12)
+
+        X = data[['time_float', 'month_sin', 'month_cos']].values
+        y = data[variable].values
+       
+        # For the estimation of the long-term trend, we use a spline term with n_splines=80.
+        # This controls the flexibility of the spline fit over time.
+        # - A higher n_splines allows the model to capture more rapid changes (but also more noise).
+        # - A lower n_splines results in a smoother trend that captures only large-scale variations.
+        gam = LinearGAM(s(0, n_splines=80) + l(1) + l(2), fit_intercept=False).fit(X, y)
+
+        trend = gam.partial_dependence(term=0, X=X)
+        season = gam.partial_dependence(term=1, X=X) + gam.partial_dependence(term=2, X=X)
+
+        trend_df=pd.DataFrame({
+            "time": data["time"].values,
+            "biomass": trend
+        })
+        season_df=pd.DataFrame({
+            "time": data["time"].values,
+            "biomass": season
+        })
+
+        return trend_df,season_df
+
+    def _cost_function(
+        self: GAMPteropodCostFunction,
+        args: np.ndarray,
+        forcing_parameters: acidity.ForcingParameter,
+        observations: Sequence[Observation],
+        environment_parameters: EnvironmentParameter | None = None,
+        kernel_parameters: KernelParameter | None = None,
+    ) -> tuple:
+        groups_name = self.functional_groups.functional_groups_name
+        filled_args = self.functional_groups.generate_matrix(args)
+        day_layers = filled_args[:, NO_TRANSPORT_DAY_LAYER_POS].flatten()
+        night_layers = filled_args[:, NO_TRANSPORT_NIGHT_LAYER_POS].flatten()
+
+        fg_parameters = FunctionalGroupGeneratorAcidity(filled_args, groups_name)
+
+        model = model_generator_acidity(
+            forcing_parameters,
+            fg_parameters,
+            environment_parameters=environment_parameters,
+            kernel_parameters=kernel_parameters,
+        )
+
+        model.run()
+
+        predicted_biomass = model.state["biomass"]
+
+        def RMSE(obs,pred):
+            """compute squared, normalised RMSE"""
+            # align in time obs and pred
+            df=pd.merge(obs,pred,on="time",how="inner",suffixes=("_obs","_pred"))
+            # compute RMSE
+            cost=float(((df["biomass_obs"]-df["biomass_pred"])**2).mean())
+            cost=np.sqrt(cost)
+            cost/=float(df["biomass_obs"].std())
+            return cost
+
+        cost=[]
+        for obs in observations:
+            predicted = obs._helper_resample_data_by_time_type(predicted_biomass)
+            predicted = predicted.pint.quantify().pint.to(BIOMASS_UNITS).pint.dequantify()
+            obs.observation = obs.observation.pint.quantify().pint.to(BIOMASS_UNITS).pint.dequantify()
+            obs_df=pd.DataFrame({
+                "time": obs.observation["time"].values,
+                "day": obs.observation.to_array().squeeze().values
+            })
+            pred_df=pd.DataFrame({
+                "time": predicted["time"].values[3:],
+                "biomass": predicted.squeeze().values[3:] # [3:] to rm the first 3 months (let the model stabilise)
+            })
+            obs_trend, obs_season = self.decompose_GAM(obs_df, "day")
+            pred_trend, pred_season = self.decompose_GAM(pred_df, "biomass")
+
+            rmse_trend = self.weights[0]*RMSE(obs_trend, pred_trend)
+            rmse_season = self.weights[1]*RMSE(obs_season, pred_season)
+
+            cost.append(rmse_trend + rmse_season)
+                
+        return tuple(cost)

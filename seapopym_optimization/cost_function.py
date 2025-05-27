@@ -302,6 +302,7 @@ class NoTransportCostFunction(GenericCostFunction):
     centered_mse: bool = False
     root_mse: bool = True
     normalized_mse: bool = True
+    log_transform_mse: bool =False
 
     def __post_init__(self: NoTransportCostFunction) -> None:
         """Check that the kwargs are set."""
@@ -342,6 +343,7 @@ class NoTransportCostFunction(GenericCostFunction):
                     centered=self.centered_mse,
                     root=self.root_mse,
                     normalized=self.normalized_mse,
+                    log_transform=self.log_transform_mse
                 )
             )
             for obs in observations
