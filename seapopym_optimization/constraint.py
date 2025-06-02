@@ -14,20 +14,6 @@ from deap import tools
 # contrainte par rapport aux individus.
 
 
-def constraint_generator_no_transport_energy_coef(
-    energy_coefficient_positions: Sequence[int],
-    min_energy_coef_value: float,
-    max_energy_coef_value: float,
-) -> tools.DeltaPenalty:
-    """Limit the total energy coefficient to a miximum of 100% (=1) in the NoTransport SeapoPym model."""
-
-    def feasible(individual: Sequence[float]) -> bool:
-        total_coef = sum([individual[i] for i in energy_coefficient_positions])
-        return min_energy_coef_value <= total_coef <= max_energy_coef_value
-
-    return tools.DeltaPenalty(feasibility=feasible, delta=np.inf)
-
-
 @dataclass
 class GenericConstraint(ABC):
     parameters_name: Sequence[str]

@@ -130,7 +130,7 @@ class GeneticAlgorithmParameters:
 @dataclass
 class GeneticAlgorithm:
     """
-    Contains the genetic algorithm parameters and thA quoi correspondent e cost function to optimize. By default, the order of
+    Contains the genetic algorithm parameters and the cost function to optimize. By default, the order of
     of the process is SCM: Select, Cross, Mutate.
     """
 
@@ -145,7 +145,6 @@ class GeneticAlgorithm:
 
     def __post_init__(self: GeneticAlgorithm) -> None:
         """Check parameters."""
-        # TODO(Jules): Vérifier que les paramètres ont des noms uniques.
         # LOGBOOK
         if self.logbook_path is not None:
             if not isinstance(self.logbook_path, Path):
@@ -236,7 +235,7 @@ class GeneticAlgorithm:
             population = []
             for individual, individual_fitness in zip(individuals_values, population_unprocessed["fitness"]):
                 indiv = self.toolbox.Individual(individual)
-                indiv.fitness.values = individual_fitness
+                indiv.fitness.values = individual_fitness  # TODO(Jules): Si valeur nulle alors calculer le fitness
                 population.append(indiv)
             return last_computed_generation + 1, population
         return 0, []
