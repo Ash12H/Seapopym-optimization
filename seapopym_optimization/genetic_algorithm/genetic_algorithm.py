@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
     from seapopym_optimization.constraint.energy_transfert_constraint import GenericConstraint
     from seapopym_optimization.cost_function import GenericCostFunction
-    from seapopym_optimization.functional_group.functional_groups import Parameter
+    from seapopym_optimization.functional_group.no_transport_functional_groups import Parameter
 
 
 @dataclass

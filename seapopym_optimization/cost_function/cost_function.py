@@ -16,7 +16,10 @@ import xarray as xr
 from seapopym.configuration.no_transport.configuration import KernelParameters
 from seapopym.configuration.parameters.parameter_environment import EnvironmentParameter
 
-from seapopym_optimization.functional_group.functional_groups import AllGroups, FunctionalGroupOptimizeNoTransport
+from seapopym_optimization.functional_group.no_transport_functional_groups import (
+    AllGroups,
+    FunctionalGroupOptimizeNoTransport,
+)
 from seapopym_optimization.model_generator.wrapper import (
     NO_TRANSPORT_DAY_LAYER_POS,
     NO_TRANSPORT_NIGHT_LAYER_POS,

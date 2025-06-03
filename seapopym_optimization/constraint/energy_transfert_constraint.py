@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from functools import partial
 from typing import Callable, Sequence
 
-from seapopym_optimization.constraint.abstract_constraint import AbstractConstraint
+from seapopym_optimization.constraint.base_constraint import AbstractConstraint
 
 
 @dataclass

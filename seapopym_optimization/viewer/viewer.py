@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from seapopym.configuration.no_transport.parameter import ForcingParameters
 
     from seapopym_optimization.cost_function import Observation
-    from seapopym_optimization.functional_group.functional_groups import AllGroups
+    from seapopym_optimization.functional_group.no_transport_functional_groups import AllGroups
 from sklearn.preprocessing import QuantileTransformer
 
 
