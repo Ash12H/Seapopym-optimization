@@ -74,6 +74,10 @@ class GenericFunctionalGroupOptimize(ABC):
         excluded = ("name",)
         return tuple(getattr(self, field.name) for field in fields(self) if field.name not in excluded)
 
+    def as_dict(self: GenericFunctionalGroupOptimize) -> dict:
+        """Return the attributes of the functional group as a dictionary."""
+        return {field.name: getattr(self, field.name) for field in fields(self) if field.name != "name"}
+
     def get_fixed_parameters(self: GenericFunctionalGroupOptimize, *, fill_with_name: float = True) -> tuple:
         """
         Return a tuple that contains all the functional group parameters (except name) as float values. When value is
@@ -93,7 +97,6 @@ class GenericFunctionalGroupOptimize(ABC):
 class FunctionalGroupOptimizeNoTransport(GenericFunctionalGroupOptimize):
     """The parameters of a functional group as they are defined in the SeapoPym NoTransport model."""
 
-    # NOTE(Jules): Be sure that you respect the order of the parameters as defined in the wrapper module.
     day_layer: float | Parameter
     night_layer: float | Parameter
     energy_coefficient: float | Parameter
@@ -116,7 +119,11 @@ class AllGroups:
 
     @property
     def unique_functional_groups_parameters_ordered(self: AllGroups) -> dict[str, Parameter]:
-        """Return the unique parameters of all functional groups in the order of declaration."""
+        """
+        Return the unique optimized parameters of all functional groups in the order of declaration.
+
+        Used to setup toolbox for optimization algorithms.
+        """
         all_param = tuple(chain.from_iterable(group.get_parameters_to_optimize() for group in self.functional_groups))
         unique_params = {}
         for param in all_param:
@@ -124,16 +131,60 @@ class AllGroups:
                 unique_params[param.name] = param
         return unique_params
 
-    def _replace_strings_with_values(self: AllGroups, data_tuple: tuple, mapping_dict: dict[str, float]) -> tuple:
-        """Replace all strings in a tuple with their corresponding values in a dictionary."""
-        return tuple(mapping_dict.get(item, item) if isinstance(item, str) else item for item in data_tuple)
+    # TODO(Jules): Rename, no more matrix
+    def generate_matrix(self: AllGroups, x: Sequence[float]) -> list[dict[str, float]]:
+        """
+        Generate the matrix of all parameters for all functional groups. It can be used by the wrapper to generate the
+        model.
+        """
 
-    def generate_matrix(self: AllGroups, x: Sequence[float]) -> np.ndarray:
-        """Generate the matrix of all parameters for all functional groups. This can be used to generate the model."""
+        def _replace_strings_with_values(data_tuple: tuple, mapping_dict: dict[str, float]) -> tuple:
+            """Replace all strings in a tuple with their corresponding values in a dictionary."""
+            return tuple(mapping_dict.get(item, item) if isinstance(item, str) else item for item in data_tuple)
+
         keys = self.unique_functional_groups_parameters_ordered.keys()
-        parameters_values = dict(zip(keys, x))
         all_param = tuple(
             chain.from_iterable(group.get_fixed_parameters(fill_with_name=True) for group in self.functional_groups)
         )
-        all_param = self._replace_strings_with_values(all_param, parameters_values)
-        return np.array(all_param).reshape(len(self.functional_groups), -1)
+        try:
+            parameters_values = dict(zip(keys, x, strict=True))
+        except ValueError as e:
+            msg = (
+                f"Cost function parameters {x} do not match the expected parameters {keys}. "
+                "Please check your parameters definition."
+            )
+            raise ValueError(msg) from e
+        all_param = _replace_strings_with_values(all_param, parameters_values)
+        all_param = np.array(all_param).reshape(len(self.functional_groups), -1)
+        return [
+            dict(zip(fgroup.as_dict().keys(), params_value))
+            for fgroup, params_value in zip(self.functional_groups, all_param, strict=True)
+        ]
+
+
+if __name__ == "__main__":
+    # Example usage
+    fg1 = FunctionalGroupOptimizeNoTransport(
+        name="FG1",
+        day_layer=Parameter(name="day_layer", lower_bound=0, upper_bound=10),
+        night_layer=1,
+        energy_coefficient=Parameter(name="FG1_energy_coefficient", lower_bound=0, upper_bound=1),
+        tr_max=Parameter(name="tr_max", lower_bound=0, upper_bound=100),
+        tr_rate=Parameter(name="tr_rate", lower_bound=0, upper_bound=1),
+        inv_lambda_max=Parameter(name="inv_lambda_max", lower_bound=0, upper_bound=10),
+        inv_lambda_rate=Parameter(name="inv_lambda_rate", lower_bound=0, upper_bound=1),
+    )
+
+    fg2 = FunctionalGroupOptimizeNoTransport(
+        name="FG2",
+        day_layer=Parameter(name="day_layer", lower_bound=0, upper_bound=10),
+        night_layer=2,
+        energy_coefficient=Parameter(name="FG2_energy_coefficient", lower_bound=0, upper_bound=1),
+        tr_max=Parameter(name="tr_max", lower_bound=0, upper_bound=100),
+        tr_rate=Parameter(name="tr_rate", lower_bound=0, upper_bound=1),
+        inv_lambda_max=Parameter(name="inv_lambda_max", lower_bound=0, upper_bound=10),
+        inv_lambda_rate=Parameter(name="inv_lambda_rate", lower_bound=0, upper_bound=1),
+    )
+
+    all_groups = AllGroups(functional_groups=[fg1, fg2])
+    print(all_groups.generate_matrix([5, 5, 50, 0.1, 5, 0.5, 66]))

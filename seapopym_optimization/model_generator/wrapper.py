@@ -30,26 +30,9 @@ class FunctionalGroupGeneratorNoTransport:
     """
     This class is a wrapper around the SeapoPym model to automatically create functional groups with the given
     parameters. The parameters must be given as a 2D array with the shape (functional_group >=1, parameter == 7).
-
-    Parameters
-    ----------
-    parameters : np.ndarray
-        Axes: (functional_group >=1, parameter == 7). The parameters order is :
-        - day_layer
-        - night_layer
-        - energy_transfert
-        - tr_max
-        - tr_rate
-        - inv_lambda_max
-        - inv_lambda_rate
-
     """
 
     parameters: np.ndarray
-    """
-    Axes: (functional_group, parameter). The parameters order is : day_layer, night_layer, energy_transfert, tr_max,
-    tr_rate, inv_lambda_max, inv_lambda_rate.
-    """
     groups_name: list[str] = None
 
     def __post_init__(self: FunctionalGroupGeneratorNoTransport) -> None:

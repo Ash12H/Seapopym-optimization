@@ -13,7 +13,7 @@ import xarray as xr
 from plotly.subplots import make_subplots
 from scipy.stats import entropy
 
-from seapopym_optimization import wrapper
+from seapopym_optimization.model_generator import wrapper
 
 if TYPE_CHECKING:
     from dask.distributed import Client
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from seapopym.configuration.no_transport.parameter import ForcingParameters
 
     from seapopym_optimization.cost_function import Observation
-    from seapopym_optimization.functional_groups import AllGroups
+    from seapopym_optimization.functional_group.functional_groups import AllGroups
 from sklearn.preprocessing import QuantileTransformer
 
 

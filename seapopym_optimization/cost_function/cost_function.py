@@ -16,8 +16,8 @@ import xarray as xr
 from seapopym.configuration.no_transport.configuration import KernelParameters
 from seapopym.configuration.parameters.parameter_environment import EnvironmentParameter
 
-from seapopym_optimization.functional_groups import AllGroups, FunctionalGroupOptimizeNoTransport
-from seapopym_optimization.wrapper import (
+from seapopym_optimization.functional_group.functional_groups import AllGroups, FunctionalGroupOptimizeNoTransport
+from seapopym_optimization.model_generator.wrapper import (
     NO_TRANSPORT_DAY_LAYER_POS,
     NO_TRANSPORT_NIGHT_LAYER_POS,
     FunctionalGroupGeneratorNoTransport,
@@ -310,8 +310,8 @@ class NoTransportCostFunction(GenericCostFunction):
     ) -> tuple:
         groups_name = self.functional_groups.functional_groups_name
         filled_args = self.functional_groups.generate_matrix(args)
-        day_layers = filled_args[:, NO_TRANSPORT_DAY_LAYER_POS].flatten()
-        night_layers = filled_args[:, NO_TRANSPORT_NIGHT_LAYER_POS].flatten()
+        layer_position_during_day = filled_args[:, NO_TRANSPORT_DAY_LAYER_POS].flatten()
+        layer_position_during_night = filled_args[:, NO_TRANSPORT_NIGHT_LAYER_POS].flatten()
 
         fg_parameters = FunctionalGroupGeneratorNoTransport(filled_args, groups_name)
 
@@ -330,8 +330,8 @@ class NoTransportCostFunction(GenericCostFunction):
             sum(
                 obs.mean_square_error(
                     predicted=predicted_biomass,
-                    day_layer=day_layers,
-                    night_layer=night_layers,
+                    day_layer=layer_position_during_day,
+                    night_layer=layer_position_during_night,
                     centered=self.centered_mse,
                     root=self.root_mse,
                     normalized=self.normalized_mse,

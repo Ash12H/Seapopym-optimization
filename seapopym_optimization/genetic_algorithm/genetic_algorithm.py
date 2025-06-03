@@ -17,9 +17,9 @@ from seapopym_optimization.viewer import GeneticAlgorithmViewer, _compute_stats
 if TYPE_CHECKING:
     from dask.distributed import Client
 
-    from seapopym_optimization.constraint import GenericConstraint
+    from seapopym_optimization.constraint.energy_transfert_constraint import GenericConstraint
     from seapopym_optimization.cost_function import GenericCostFunction
-    from seapopym_optimization.functional_groups import Parameter
+    from seapopym_optimization.functional_group.functional_groups import Parameter
 
 
 @dataclass
