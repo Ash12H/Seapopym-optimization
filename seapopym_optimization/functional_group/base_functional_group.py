@@ -83,10 +83,9 @@ class FunctionalGroupSet:
 
     functional_groups: Sequence[AbstractFunctionalGroup]
 
-    # TODO(Jules): Remove this method if not used.
-    # def functional_groups_name(self: AllGroups) -> Sequence[str]:
-    #     """Return the ordered list of the functional groups name."""
-    #     return tuple(group.name for group in self.functional_groups)
+    def functional_groups_name(self: FunctionalGroupSet) -> Sequence[str]:
+        """Return the ordered list of the functional groups name."""
+        return tuple(group.name for group in self.functional_groups)
 
     def unique_functional_groups_parameters_ordered(self: FunctionalGroupSet) -> dict[str, Parameter]:
         """
@@ -138,7 +137,7 @@ class FunctionalGroupSet:
                 parameters_values.get(param.name, np.nan) if isinstance(param, Parameter) else param
                 for param in group.parameters
             ]
-            result.append(dict(zip(param_names, param_values)))
+            result.append(dict(zip(param_names, param_values, strict=True)))
         return result
 
     # NOTE(Jules): Old version of the `generate` method. Kept for reference but not used. Should be removed if

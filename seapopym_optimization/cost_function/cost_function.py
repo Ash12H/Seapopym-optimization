@@ -20,7 +20,7 @@ from seapopym_optimization.functional_group.no_transport_functional_groups impor
     AllGroups,
     FunctionalGroupOptimizeNoTransport,
 )
-from seapopym_optimization.model_generator.wrapper import (
+from seapopym_optimization.model_generator.base_model_generator import (
     NO_TRANSPORT_DAY_LAYER_POS,
     NO_TRANSPORT_NIGHT_LAYER_POS,
     FunctionalGroupGeneratorNoTransport,

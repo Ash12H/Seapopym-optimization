@@ -1,37 +1,21 @@
-[tool.poetry]
+[project]
 name = "seapopym_optimization"
-version = "0.1.0"
-description = ""
-authors = ["Jules Lehodey <juleslehodey31320@hotmail.fr>"]
+description = "A Python package for optimizing SeapoPym models using DEAP and Dask"
+dynamic = ["version"]
+license = { text = "MIT" }
 readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    { name = "Jules Lehodey", email = "lehodey.jules+seapopym@gmail.com" },
+]
+keywords = ["oceanography", "marine ecosystems", "marine biology"]
+classifiers = ["Topic :: Scientific/Engineering :: Oceanography"]
 
-
-[tool.poetry.dependencies]
-python = ">=3.12,<3.13"
-seapopym = "^0.0.1.3.2.3"
-deap = "^1.4.1"
-ipykernel = "^6.29.4"
-plotly = "^5.22.0"
-nbformat = "^5.10.4"
-ruff = "^0.4.10"
-dask = "^2024.7.0"
-distributed = "^2024.7.0"
-cloudpickle = "^3.0.0"
-scipy = "^1.14.0"
-seaborn = "^0.13.2"
-salib = "^1.5.0"
-pytest = "^8.3.3"
-tqdm = "^4.67.1"
-copernicusmarine = "^2.0.0"
-ipywidgets = "^8.1.5"
-scikit-learn = "^1.6.1"
-sympy = "^1.13.3"
-pyarrow = "^19.0.1"
-
-
-[tool.poetry.group.extra.dependencies]
-statsmodels = "^0.14.4"
+dependencies = ["seapopym", "deap", "dask", "distributed"]
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+version = "0.0.2.1"

@@ -13,7 +13,7 @@ import xarray as xr
 from plotly.subplots import make_subplots
 from scipy.stats import entropy
 
-from seapopym_optimization.model_generator import wrapper
+from seapopym_optimization.model_generator import base_model_generator
 
 if TYPE_CHECKING:
     from dask.distributed import Client
@@ -91,9 +91,9 @@ class GeneticAlgorithmViewer:
     @property
     def original_simulation(self: GeneticAlgorithmViewer) -> xr.Dataset:
         original_config = [[0, 0, 0.1668, 10.38, -0.11, 150, -0.15]]
-        original_model = wrapper.model_generator_no_transport(
+        original_model = base_model_generator.model_generator_no_transport(
             forcing_parameters=self.forcing_parameters,
-            fg_parameters=wrapper.FunctionalGroupGeneratorNoTransport(
+            fg_parameters=base_model_generator.FunctionalGroupGeneratorNoTransport(
                 parameters=original_config, groups_name=["Total"]
             ),
         )
@@ -129,9 +129,9 @@ class GeneticAlgorithmViewer:
 
         def run_simulation(individual: tuple[int, np.ndarray]):
             """Take an individual as (number, parameters) and run the simulation."""
-            model = wrapper.model_generator_no_transport(
+            model = base_model_generator.model_generator_no_transport(
                 forcing_parameters=self.forcing_parameters,
-                fg_parameters=wrapper.FunctionalGroupGeneratorNoTransport(
+                fg_parameters=base_model_generator.FunctionalGroupGeneratorNoTransport(
                     parameters=individual[1], groups_name=self.parameters.functional_groups_name
                 ),
             )
