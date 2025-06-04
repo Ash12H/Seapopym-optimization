@@ -11,7 +11,7 @@ authors = [
 keywords = ["oceanography", "marine ecosystems", "marine biology"]
 classifiers = ["Topic :: Scientific/Engineering :: Oceanography"]
 
-dependencies = ["seapopym", "deap", "dask", "distributed"]
+dependencies = ["seapopym", "deap", "dask", "distributed", "pytest"]
 
 [build-system]
 requires = ["poetry-core"]

@@ -30,7 +30,11 @@ class AbstractModelGenerator(ABC):
     kernel: AbstractKernelParameter
 
     @abstractmethod
-    def generate(self: AbstractModelGenerator, functional_group_set: FunctionalGroupSet) -> BaseModel:
+    def generate(
+        self: AbstractModelGenerator,
+        functional_group_parameters: list[dict[str, float]],
+        functional_group_names: list[str] | None = None,
+    ) -> BaseModel:
         """
         Generate a model of type `self.model_type` with the given parameters.
         This method should be implemented by the subclasses to create the specific model.
