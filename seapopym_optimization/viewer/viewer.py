@@ -61,15 +61,15 @@ class GeneticAlgorithmViewer:
 
     @property
     def parameters_names(self: GeneticAlgorithmViewer) -> list[str]:
-        return list(self.parameters.unique_functional_groups_parameters_ordered.keys())
+        return list(self.parameters.unique_functional_groups_parameters_ordered().keys())
 
     @property
     def parameters_lower_bounds(self: GeneticAlgorithmViewer):
-        return [param.lower_bound for param in self.parameters.unique_functional_groups_parameters_ordered.values()]
+        return [param.lower_bound for param in self.parameters.unique_functional_groups_parameters_ordered().values()]
 
     @property
     def parameters_upper_bound(self: GeneticAlgorithmViewer):
-        return [param.upper_bound for param in self.parameters.unique_functional_groups_parameters_ordered.values()]
+        return [param.upper_bound for param in self.parameters.unique_functional_groups_parameters_ordered().values()]
 
     @property
     def stats(self: GeneticAlgorithmViewer) -> pd.DataFrame:

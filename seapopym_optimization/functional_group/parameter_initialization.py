@@ -1,6 +1,6 @@
 """This module provides a function to generate random float values within a specified range."""
 
-from random import random
+from random import uniform
 
 MAXIMUM_INIT_TRY = 1000
 
@@ -31,7 +31,7 @@ def random_uniform_exclusive(lower: float, upper: float) -> float:
     """
     count = 0
     while count < MAXIMUM_INIT_TRY:
-        value = random.uniform(lower, upper)
+        value = uniform(lower, upper)
         if value not in (lower, upper):
             return value
         count += 1

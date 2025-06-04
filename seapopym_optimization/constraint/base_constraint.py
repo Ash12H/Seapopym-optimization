@@ -52,5 +52,5 @@ class AbstractConstraint(ABC):
             """
             return [ordered_names.index(param) for param in self.parameters_name]
 
-        feasible = self._feasible(selected_index=self._generate_index(ordered_names))
+        feasible = self._feasible(selected_index=generate_index(ordered_names))
         return tools.DeltaPenalty(feasibility=feasible, delta=np.inf)

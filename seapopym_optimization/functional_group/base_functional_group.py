@@ -8,11 +8,14 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass, fields
 from itertools import chain
-from typing import Callable, Sequence
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from seapopym_optimization.functional_group.parameter_initialization import random_uniform_exclusive
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
 
 
 @dataclass
