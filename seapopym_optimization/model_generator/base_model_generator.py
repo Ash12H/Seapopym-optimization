@@ -14,8 +14,6 @@ if TYPE_CHECKING:
     )
     from seapopym.model.base_model import BaseModel
 
-    from seapopym_optimization.functional_group.base_functional_group import FunctionalGroupSet
-
 
 @dataclass(kw_only=True)
 class AbstractModelGenerator(ABC):

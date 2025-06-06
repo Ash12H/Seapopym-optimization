@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from numbers import Number
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -14,8 +15,10 @@ from plotly.subplots import make_subplots
 from scipy.stats import entropy
 from sklearn.preprocessing import QuantileTransformer
 
-from seapopym_optimization.genetic_algorithm.simple_logbook import LogbookCategory, LogbookIndex
+from seapopym_optimization.cost_function.observations import TimeSeriesObservation
+from seapopym_optimization.genetic_algorithm.simple_logbook import Logbook, LogbookCategory, LogbookIndex
 from seapopym_optimization.model_generator import base_model_generator
+from seapopym_optimization.viewer.base_viewer import AbstractViewer
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -23,21 +26,18 @@ if TYPE_CHECKING:
     from dask.distributed import Client
     from plotly.graph_objects import Figure
 
-    from seapopym_optimization.cost_function import Observation
-    from seapopym_optimization.functional_group.no_transport_functional_groups import AllGroups
 
-
-def compute_stats(logbook: pd.DataFrame) -> pd.DataFrame:
+def compute_stats(logbook: Logbook) -> pd.DataFrame:
     """Compute the statistics of the generations."""
-    stats = logbook.loc[:, LogbookCategory.WEIGHTED_FITNESS.value]
-    stats = stats[np.isfinite(stats.loc[:, LogbookCategory.WEIGHTED_FITNESS.value])]
+    stats = logbook.loc[:, LogbookCategory.WEIGHTED_FITNESS]
+    stats = stats[np.isfinite(stats.loc[:, LogbookCategory.WEIGHTED_FITNESS])]
     generation_gap = (
         stats.reset_index()
-        .groupby(LogbookIndex.GENERATION.value)[LogbookIndex.PREVIOUS_GENERATION.value]
+        .groupby(LogbookIndex.GENERATION)[LogbookIndex.PREVIOUS_GENERATION]
         .agg(lambda x: np.sum(x) / len(x))
     )
     stats = (
-        stats.groupby(LogbookIndex.GENERATION.value)[LogbookCategory.WEIGHTED_FITNESS.value]
+        stats.groupby(LogbookIndex.GENERATION)[LogbookCategory.WEIGHTED_FITNESS]
         .aggregate(["mean", "std", "min", "max", "count"])
         .rename(columns={"count": "valid"})
     )
@@ -46,80 +46,65 @@ def compute_stats(logbook: pd.DataFrame) -> pd.DataFrame:
 
 
 @dataclass
-class GeneticAlgorithmViewer:
+class SimpleViewer(AbstractViewer):
     """
     Structure that contains the output of the optimization. Use the representation to plot some informations about the
     results.
     """
 
-    logbook: pd.DataFrame
-    parameters: AllGroups
-    forcing_parameters: ForcingParameters
-    observations: Sequence[Observation]
-    _minimize: bool = field(init=False, default=None)
+    logbook: Logbook
+    observations: Sequence[TimeSeriesObservation]
+    cost_function_weight: tuple[Number]
     _nbest_simulations: xr.Dataset = field(init=False, default=None)
 
-    def __post_init__(self: GeneticAlgorithmViewer) -> None:
-        """Check the logbook and set the minimize attribute."""
-        self._minimize = self.logbook[LogbookCategory.WEIGHTED_FITNESS.value].max() < 0
-
-        self.logbook = self.logbook.drop(columns=[LogbookCategory.WEIGHTED_FITNESS.value])
-        self.logbook[LogbookCategory.WEIGHTED_FITNESS.value] = self.logbook[
-            LogbookCategory.WEIGHTED_FITNESS.value
-        ].abs()
+    @property
+    def parameters_names(self: SimpleViewer) -> list[str]:
+        """Return the names of the parameters as an ordered list."""
+        return list(self.functional_group_set.unique_functional_groups_parameters_ordered().keys())
 
     @property
-    def parameters_names(self: GeneticAlgorithmViewer) -> list[str]:
-        return list(self.parameters.unique_functional_groups_parameters_ordered().keys())
+    def parameters_lower_bounds(self: SimpleViewer) -> list[float]:
+        """Return the lower bounds of the parameters as an ordered list."""
+        return [
+            param.lower_bound
+            for param in self.functional_group_set.unique_functional_groups_parameters_ordered().values()
+        ]
 
     @property
-    def parameters_lower_bounds(self: GeneticAlgorithmViewer):
-        return [param.lower_bound for param in self.parameters.unique_functional_groups_parameters_ordered().values()]
+    def parameters_upper_bound(self: SimpleViewer) -> list[float]:
+        """Return the upper bounds of the parameters as an ordered list."""
+        return [
+            param.upper_bound
+            for param in self.functional_group_set.unique_functional_groups_parameters_ordered().values()
+        ]
 
     @property
-    def parameters_upper_bound(self: GeneticAlgorithmViewer):
-        return [param.upper_bound for param in self.parameters.unique_functional_groups_parameters_ordered().values()]
-
-    @property
-    def stats(self: GeneticAlgorithmViewer) -> pd.DataFrame:
+    def stats(self: SimpleViewer) -> pd.DataFrame:
         """A review of the generations stats."""
         return compute_stats(self.logbook)
 
     @property
-    def hall_of_fame(self: GeneticAlgorithmViewer) -> pd.DataFrame:
+    def hall_of_fame(self: SimpleViewer) -> pd.DataFrame:
         """The best individuals and their fitness."""
-        logbook = self.logbook
-        # In case of constraint violation:
-        condition_not_inf = np.isfinite(logbook["fitness"])
-        # Avoid to take the same individual:
-        condition_not_already_calculated = ~logbook.index.get_level_values(LogbookIndex.PREVIOUS_GENERATION.value)
+        logbook = self.logbook.copy()
+        condition_not_inf = np.isfinite(logbook.loc[:, LogbookCategory.WEIGHTED_FITNESS])
+        condition_not_already_calculated = ~logbook.index.get_level_values(LogbookIndex.PREVIOUS_GENERATION)
         condition = condition_not_inf & condition_not_already_calculated
         previous_generation_level = 1
-        return logbook[condition].sort_values("fitness", ascending=self._minimize).droplevel(previous_generation_level)
-
-    @property
-    def original_simulation(self: GeneticAlgorithmViewer) -> xr.Dataset:
-        original_config = [[0, 0, 0.1668, 10.38, -0.11, 150, -0.15]]
-        original_model = base_model_generator.model_generator_no_transport(
-            forcing_parameters=self.forcing_parameters,
-            fg_parameters=base_model_generator.FunctionalGroupGeneratorNoTransport(
-                parameters=original_config, groups_name=["Total"]
-            ),
+        return (
+            logbook[condition]
+            .sort_values(LogbookCategory.WEIGHTED_FITNESS, ascending=False)
+            .droplevel(previous_generation_level)
         )
 
-        original_model.run()
-        return original_model.export_biomass()
-
     @property
-    def best_simulation(self: GeneticAlgorithmViewer) -> xr.Dataset:
+    def best_simulation(self: SimpleViewer) -> xr.Dataset:
         if self._nbest_simulations is not None:
             return self._nbest_simulations.sel(individual=0)
 
         return self.best_individuals_simulations(nbest=1)
 
-    def best_individuals_simulations(
-        self: GeneticAlgorithmViewer, nbest: int, client: Client | None = None
-    ) -> xr.Dataset:
+    def best_individuals_simulations(self: SimpleViewer, nbest: int, client: Client | None = None) -> xr.Dataset:
         min_nbest = 0
         if self._nbest_simulations is not None:
             if nbest <= self._nbest_simulations.sizes["individual"]:
@@ -160,7 +145,7 @@ class GeneticAlgorithmViewer:
 
         return self._nbest_simulations
 
-    def fitness_evolution(self: GeneticAlgorithmViewer, *, log_y: bool = True) -> Figure:
+    def fitness_evolution(self: SimpleViewer, *, log_y: bool = True) -> Figure:
         """Print the evolution of the fitness by generation."""
         data = self.logbook[np.isfinite(self.logbook["fitness"])]["fitness"].reset_index()
         figure = px.box(data_frame=data, x="generation", y="fitness", points=False, log_y=log_y)
@@ -186,7 +171,7 @@ class GeneticAlgorithmViewer:
         figure.update_layout(title_text="Fitness evolution")
         return figure
 
-    def box_plot(self: GeneticAlgorithmViewer, columns_number: int, nbest: int | None = None) -> go.Figure:
+    def box_plot(self: SimpleViewer, columns_number: int, nbest: int | None = None) -> go.Figure:
         """Print the `nbest` best individuals in the hall_of_fame as box plots."""
         nb_fig = len(self.parameters_names)
         nb_row = nb_fig // columns_number + (1 if nb_fig % columns_number > 0 else 0)
@@ -225,7 +210,7 @@ class GeneticAlgorithmViewer:
         return fig
 
     def parallel_coordinates(
-        self: GeneticAlgorithmViewer,
+        self: SimpleViewer,
         *,
         nbest: int | None = None,
         uniformed: bool = False,
@@ -297,7 +282,7 @@ class GeneticAlgorithmViewer:
 
         return figures
 
-    def parameters_standardized_deviation(self: GeneticAlgorithmViewer) -> go.Figure:
+    def parameters_standardized_deviation(self: SimpleViewer) -> go.Figure:
         """Print the standardized deviation of the parameters by generation."""
         param_range = {
             name: ub - lb
@@ -335,7 +320,7 @@ class GeneticAlgorithmViewer:
         )
         return fig
 
-    def shannon_entropy(self: GeneticAlgorithmViewer, *, bins: int = 10) -> go.Figure:
+    def shannon_entropy(self: SimpleViewer, *, bins: int = 10) -> go.Figure:
         """Proche de 0 = distribution similaires."""
 
         def compute_shannon_entropy(p: np.ndarray) -> float:
@@ -372,7 +357,7 @@ class GeneticAlgorithmViewer:
         ).update_layout(xaxis_showgrid=False, yaxis_showgrid=False, plot_bgcolor="rgba(0, 0, 0, 0)")
 
     def parameters_scatter_matrix(
-        self: GeneticAlgorithmViewer,
+        self: SimpleViewer,
         nbest: int | None = None,
         size: int = 1000,
         **kwargs: dict,
@@ -413,7 +398,7 @@ class GeneticAlgorithmViewer:
 
         return fig
 
-    def parameters_correlation_matrix(self: GeneticAlgorithmViewer, nbest: int | None = None) -> go.Figure:
+    def parameters_correlation_matrix(self: SimpleViewer, nbest: int | None = None) -> go.Figure:
         """Print the correlation matrix of the parameters for the N best individuals."""
         indiv_param = self.hall_of_fame.iloc[:nbest, :-1].to_numpy()
         param_names = self.hall_of_fame.columns[:-1]
@@ -440,9 +425,7 @@ class GeneticAlgorithmViewer:
         )
         return fig
 
-    def time_series(
-        self: GeneticAlgorithmViewer, nbest: int, title: Iterable[str] | None = None, client=None
-    ) -> list[go.Figure]:
+    def time_series(self: SimpleViewer, nbest: int, title: Iterable[str] | None = None, client=None) -> list[go.Figure]:
         def _plot_observation(observation: xr.DataArray, day_cycle: str, layer: int) -> go.Scatter:
             y = observation.sel(layer=layer)
             x = y.cf["T"]
@@ -557,7 +540,7 @@ class GeneticAlgorithmViewer:
 
     # TODO(Jules) : Be able to zoom correlation axis. Like corr_range=[0.7, 1]
     def taylor_diagram(
-        self: GeneticAlgorithmViewer, nbest: int = 1, client=None, range_theta: Iterable[int] = [0, 90]
+        self: SimpleViewer, nbest: int = 1, client=None, range_theta: Iterable[int] = [0, 90]
     ) -> go.Figure:
         best_simulations = self.best_individuals_simulations(nbest, client=client)
 

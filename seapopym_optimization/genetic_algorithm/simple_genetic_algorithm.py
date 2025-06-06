@@ -4,31 +4,26 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from enum import StrEnum
-from logging import warning
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
-import pandas as pd
 from deap import algorithms, base, tools
-from IPython.display import clear_output, display
-from pandas._typing import FilePath, WriteBuffer
-from pandera.typing import DataFrame
-from tqdm import tqdm
 
 from seapopym_optimization.genetic_algorithm.base_genetic_algorithm import (
     AbstractGeneticAlgorithmParameters,
     individual_creator,
 )
 from seapopym_optimization.genetic_algorithm.simple_logbook import Logbook, LogbookCategory, LogbookIndex
-from seapopym_optimization.viewer.viewer import GeneticAlgorithmViewer, compute_stats
+from seapopym_optimization.viewer.simple_viewer import SimpleViewer
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from os import PathLike
+    from numbers import Number
 
+    import pandas as pd
     from dask.distributed import Client
+    from pandas._typing import FilePath, WriteBuffer
 
     from seapopym_optimization.constraint.energy_transfert_constraint import AbstractConstraint
     from seapopym_optimization.cost_function.base_cost_function import AbstractCostFunction
@@ -71,7 +66,7 @@ class SimpleGeneticAlgorithmParameters(AbstractGeneticAlgorithmParameters):
     NGEN: int
     POP_SIZE: int
     TOURNSIZE: int = field(default=3)
-    cost_function_weight: tuple = (-1.0,)
+    cost_function_weight: tuple[Number] = (-1.0,)
 
     def __post_init__(self: SimpleGeneticAlgorithmParameters) -> None:
         self.select = tools.selTournament
@@ -138,7 +133,6 @@ class SimpleGeneticAlgorithm:
 
     def __post_init__(self: SimpleGeneticAlgorithm) -> None:
         """Check parameters."""
-
         if self.save is not None:
             self.save = Path(self.save)
             if self.save.exists():
@@ -154,7 +148,6 @@ class SimpleGeneticAlgorithm:
 
     def update_logbook(self: SimpleGeneticAlgorithm, logbook: Logbook) -> None:
         """Update the logbook with the new data and save to disk if a path is provided."""
-
         if not isinstance(logbook, Logbook):
             logbook = Logbook(logbook)
 
@@ -204,7 +197,7 @@ class SimpleGeneticAlgorithm:
             """Create a population from the logbook DataFrame."""
             individuals = population_unprocessed.loc[:, [LogbookCategory.PARAMETER]].to_numpy()
             fitness = list(population_unprocessed.loc[:, [LogbookCategory.FITNESS]].itertuples(index=False, name=None))
-            fitness = [() if np.nan in fit else fit for fit in fitness]
+            fitness = [() if any(np.isnan(fit)) else fit for fit in fitness]
             return [
                 self.toolbox.Individual(iterator=iterator, values=values)
                 for iterator, values in zip(individuals, fitness, strict=True)
@@ -217,9 +210,10 @@ class SimpleGeneticAlgorithm:
 
         last_computed_generation = self.logbook.index.get_level_values(LogbookIndex.GENERATION).max()
         population_unprocessed = self.logbook.loc[last_computed_generation]
+
         population = create_population_from_logbook(population_unprocessed)
 
-        if any(population_unprocessed[LogbookCategory.FITNESS].isna()):
+        if population_unprocessed.loc[:, LogbookCategory.FITNESS].isna().any(axis=None):
             logger.warning("Some individuals in the logbook have no fitness values. Re-evaluating the population.")
             logbook = self._evaluate(population, last_computed_generation)
             self.logbook = None
@@ -241,9 +235,10 @@ class SimpleGeneticAlgorithm:
             self.update_logbook(logbook)
             population[:] = offspring
 
-        # return GeneticAlgorithmViewer(
-        #     parameters=self.cost_function.functional_groups,
-        #     forcing_parameters=self.cost_function.forcing_parameters,
-        #     logbook=self.logbook.copy(),
-        #     observations=self.cost_function.observations,
-        # )
+        return SimpleViewer(
+            logbook=self.logbook.copy(),
+            functional_group_set=self.cost_function.functional_groups,
+            model_generator=self.cost_function.model_generator,
+            observations=self.cost_function.observations,
+            cost_function_weight=self.meta_parameter.cost_function_weight,
+        )
