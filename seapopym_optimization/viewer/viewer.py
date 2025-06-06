@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Iterable, Literal, Sequence
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -12,25 +12,32 @@ import plotly.graph_objects as go
 import xarray as xr
 from plotly.subplots import make_subplots
 from scipy.stats import entropy
+from sklearn.preprocessing import QuantileTransformer
 
+from seapopym_optimization.genetic_algorithm.simple_logbook import LogbookCategory, LogbookIndex
 from seapopym_optimization.model_generator import base_model_generator
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Sequence
+
     from dask.distributed import Client
     from plotly.graph_objects import Figure
-    from seapopym.configuration.no_transport.parameter import ForcingParameters
 
     from seapopym_optimization.cost_function import Observation
     from seapopym_optimization.functional_group.no_transport_functional_groups import AllGroups
-from sklearn.preprocessing import QuantileTransformer
 
 
-def _compute_stats(logbook: pd.DataFrame) -> pd.DataFrame:
+def compute_stats(logbook: pd.DataFrame) -> pd.DataFrame:
     """Compute the statistics of the generations."""
-    stats = logbook[np.isfinite(logbook["fitness_final"])]
-    generation_gap = stats.reset_index().groupby("generation")["previous_generation"].agg(lambda x: np.sum(x) / len(x))
+    stats = logbook.loc[:, LogbookCategory.WEIGHTED_FITNESS.value]
+    stats = stats[np.isfinite(stats.loc[:, LogbookCategory.WEIGHTED_FITNESS.value])]
+    generation_gap = (
+        stats.reset_index()
+        .groupby(LogbookIndex.GENERATION.value)[LogbookIndex.PREVIOUS_GENERATION.value]
+        .agg(lambda x: np.sum(x) / len(x))
+    )
     stats = (
-        stats.groupby("generation")["fitness_final"]
+        stats.groupby(LogbookIndex.GENERATION.value)[LogbookCategory.WEIGHTED_FITNESS.value]
         .aggregate(["mean", "std", "min", "max", "count"])
         .rename(columns={"count": "valid"})
     )
@@ -54,10 +61,12 @@ class GeneticAlgorithmViewer:
 
     def __post_init__(self: GeneticAlgorithmViewer) -> None:
         """Check the logbook and set the minimize attribute."""
-        self._minimize = self.logbook["fitness_final"].max() < 0
+        self._minimize = self.logbook[LogbookCategory.WEIGHTED_FITNESS.value].max() < 0
 
-        self.logbook = self.logbook.drop(columns=["fitness"]).rename(columns={"fitness_final": "fitness"})
-        self.logbook["fitness"] = self.logbook["fitness"].abs()
+        self.logbook = self.logbook.drop(columns=[LogbookCategory.WEIGHTED_FITNESS.value])
+        self.logbook[LogbookCategory.WEIGHTED_FITNESS.value] = self.logbook[
+            LogbookCategory.WEIGHTED_FITNESS.value
+        ].abs()
 
     @property
     def parameters_names(self: GeneticAlgorithmViewer) -> list[str]:
@@ -74,7 +83,7 @@ class GeneticAlgorithmViewer:
     @property
     def stats(self: GeneticAlgorithmViewer) -> pd.DataFrame:
         """A review of the generations stats."""
-        return _compute_stats(self.logbook)
+        return compute_stats(self.logbook)
 
     @property
     def hall_of_fame(self: GeneticAlgorithmViewer) -> pd.DataFrame:
@@ -83,7 +92,7 @@ class GeneticAlgorithmViewer:
         # In case of constraint violation:
         condition_not_inf = np.isfinite(logbook["fitness"])
         # Avoid to take the same individual:
-        condition_not_already_calculated = ~logbook.index.get_level_values("previous_generation")
+        condition_not_already_calculated = ~logbook.index.get_level_values(LogbookIndex.PREVIOUS_GENERATION.value)
         condition = condition_not_inf & condition_not_already_calculated
         previous_generation_level = 1
         return logbook[condition].sort_values("fitness", ascending=self._minimize).droplevel(previous_generation_level)
@@ -296,7 +305,7 @@ class GeneticAlgorithmViewer:
         }
         param_std = (
             self.logbook.reset_index()
-            .drop(columns=["previous_generation", "individual", "fitness"])
+            .drop(columns=[LogbookIndex.PREVIOUS_GENERATION.value, "individual", "fitness"])
             .groupby("generation")
             .std()
         )

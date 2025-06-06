@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from deap import base
+import numpy as np
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -29,12 +30,17 @@ def individual_creator(cost_function_weight: tuple[Number]) -> type:
 
         weights = cost_function_weight
 
+        @property
+        def valid(self) -> bool:
+            """Assess if a fitness is valid or not."""
+            return (len(self.wvalues) != 0) and not any(np.isnan(value) for value in self.wvalues)
+
     class Individual(list):
         """Individual class to store the parameters of an individual."""
 
-        def __init__(self: Individual, iterator: Sequence) -> None:
+        def __init__(self: Individual, iterator: Sequence, values: Sequence[Number] = ()) -> None:
             super().__init__(iterator)
-            self.fitness = Fitness()
+            self.fitness = Fitness(values=values)
 
     return Individual
 

@@ -142,29 +142,3 @@ class FunctionalGroupSet:
             ]
             result.append(dict(zip(param_names, param_values, strict=True)))
         return result
-
-    # NOTE(Jules): Old version of the `generate` method. Kept for reference but not used. Should be removed if
-    # everything works as expected with the new version.
-
-    # def _replace_strings_with_values(data_tuple: tuple, mapping_dict: dict[str, float]) -> tuple:
-    #     """Replace all strings in a tuple with their corresponding values in a dictionary."""
-    #     return tuple(mapping_dict.get(item, item) if isinstance(item, str) else item for item in data_tuple)
-
-    # keys = self.unique_functional_groups_parameters_ordered().keys()
-    # all_param = tuple(
-    #     chain.from_iterable(group.get_fixed_parameters(fill_with_name=True) for group in self.functional_groups)
-    # )
-    # try:
-    #     parameters_values = dict(zip(keys, x, strict=True))
-    # except ValueError as e:
-    #     msg = (
-    #         f"Cost function parameters {x} do not match the expected parameters {keys}. "
-    #         "Please check your parameters definition."
-    #     )
-    #     raise ValueError(msg) from e
-    # all_param = _replace_strings_with_values(all_param, parameters_values)
-    # all_param = np.array(all_param).reshape(len(self.functional_groups), -1)
-    # return [
-    #     dict(zip(fgroup.as_dict().keys(), params_value))
-    #     for fgroup, params_value in zip(self.functional_groups, all_param, strict=True)
-    # ]

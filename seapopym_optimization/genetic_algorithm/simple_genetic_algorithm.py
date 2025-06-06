@@ -2,21 +2,27 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
+from enum import StrEnum
+from logging import warning
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pandas as pd
 from deap import algorithms, base, tools
 from IPython.display import clear_output, display
+from pandas._typing import FilePath, WriteBuffer
+from pandera.typing import DataFrame
 from tqdm import tqdm
 
 from seapopym_optimization.genetic_algorithm.base_genetic_algorithm import (
     AbstractGeneticAlgorithmParameters,
     individual_creator,
 )
-from seapopym_optimization.viewer.viewer import GeneticAlgorithmViewer, _compute_stats
+from seapopym_optimization.genetic_algorithm.simple_logbook import Logbook, LogbookCategory, LogbookIndex
+from seapopym_optimization.viewer.viewer import GeneticAlgorithmViewer, compute_stats
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -24,9 +30,11 @@ if TYPE_CHECKING:
 
     from dask.distributed import Client
 
-    from seapopym_optimization.constraint.energy_transfert_constraint import GenericConstraint
-    from seapopym_optimization.cost_function import GenericCostFunction
+    from seapopym_optimization.constraint.energy_transfert_constraint import AbstractConstraint
+    from seapopym_optimization.cost_function.base_cost_function import AbstractCostFunction
     from seapopym_optimization.functional_group.no_transport_functional_groups import Parameter
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -56,8 +64,6 @@ class SimpleGeneticAlgorithmParameters(AbstractGeneticAlgorithmParameters):
 
     """
 
-    mate: callable = field(default=tools.cxTwoPoint, init=False)
-
     ETA: float
     INDPB: float
     CXPB: float
@@ -72,9 +78,12 @@ class SimpleGeneticAlgorithmParameters(AbstractGeneticAlgorithmParameters):
         self.mate = tools.cxTwoPoint
         self.mutate = tools.mutPolynomialBounded
         self.variation = algorithms.varAnd
+        self.cost_function_weight = tuple(
+            np.asarray(self.cost_function_weight) / np.sum(np.absolute(self.cost_function_weight))
+        )
 
     def generate_toolbox(
-        self: SimpleGeneticAlgorithmParameters, parameters: Sequence[Parameter], cost_function: GenericCostFunction
+        self: SimpleGeneticAlgorithmParameters, parameters: Sequence[Parameter], cost_function: AbstractCostFunction
     ) -> base.Toolbox:
         """Generate a DEAP toolbox with the necessary functions for the genetic algorithm."""
         toolbox = base.Toolbox()
@@ -107,137 +116,134 @@ class SimpleGeneticAlgorithm:
     ----------
     meta_parameter: SimpleGeneticAlgorithmParameters
         The parameters of the genetic algorithm.
-    cost_function: GenericCostFunction
+    cost_function: AbstractCostFunction
         The cost function to optimize.
     client: Client | None
         The Dask client to use for parallel computing. If None, the algorithm will run in serial.
-    constraint: Sequence[GenericConstraint] | None
+    constraint: Sequence[AbstractConstraint] | None
         The constraints to apply to the individuals. If None, no constraints are applied.
-    logbook_path: PathLike | None
-        The path to the logbook file. If None, the logbook is not saved to a file. The logbook is a json file generated
-        with pandas and can be read with `pd.read_json(logbook_path, orient="table")`.
+    save: PathLike | None
+        The path to save the logbook (in parquet format). If None, the logbook is not saved.
 
     """
 
     meta_parameter: SimpleGeneticAlgorithmParameters
-    cost_function: GenericCostFunction
+    cost_function: AbstractCostFunction
     client: Client | None = None
-    constraint: Sequence[GenericConstraint] | None = None
-    logbook_path: PathLike | None = None
+    constraint: Sequence[AbstractConstraint] | None = None
 
-    logbook: tools.Logbook | None = field(default=None, init=False, repr=False)
+    save: FilePath | WriteBuffer[bytes] | None = None
+    logbook: Logbook | None = field(default=None, repr=False)
     toolbox: base.Toolbox | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self: SimpleGeneticAlgorithm) -> None:
         """Check parameters."""
-        if self.logbook_path is not None:
-            if not isinstance(self.logbook_path, Path):
-                self.logbook_path = Path(self.logbook_path)
-            if self.logbook_path.exists():
-                self.logbook = pd.read_json(self.logbook_path, orient="table")
+
+        if self.save is not None:
+            self.save = Path(self.save)
+            if self.save.exists():
+                waring_msg = f"Logbook file {self.save} already exists. Please choose a different path."
+                logger.warning(waring_msg)
 
         ordered_parameters = self.cost_function.functional_groups.unique_functional_groups_parameters_ordered()
         self.toolbox = self.meta_parameter.generate_toolbox(ordered_parameters.values(), self.cost_function)
+
         if self.constraint is not None:
             for constraint in self.constraint:
                 self.toolbox.decorate("evaluate", constraint.generate(list(ordered_parameters.keys())))
 
-    def _initialization(self: SimpleGeneticAlgorithm) -> tuple[int, list[base.Individual]]:
-        """
-        Initialize the population.
+    def update_logbook(self: SimpleGeneticAlgorithm, logbook: Logbook) -> None:
+        """Update the logbook with the new data and save to disk if a path is provided."""
 
-        Returns
-        -------
-        int
-            The first generation number (0 if the `logbook` is empty).
-        list[base.Individual]
-            The initialized population (an empty list if the `logbook`is empty).
+        if not isinstance(logbook, Logbook):
+            logbook = Logbook(logbook)
 
-        """
-        if self.logbook is not None:
-            population_unprocessed = self.logbook.reset_index()
-            last_computed_generation = population_unprocessed["generation"].max()
-            population_unprocessed = population_unprocessed.query("generation == @last_computed_generation")
+        self.logbook = logbook if self.logbook is None else self.logbook.append_new_generation(logbook)
 
-            individuals_values = population_unprocessed.drop(
-                columns=["generation", "individual", "previous_generation", "fitness", "fitness_final"]
-            ).to_numpy()
-            population = []
-            for individual, individual_fitness in zip(
-                individuals_values, population_unprocessed["fitness"], strict=True
-            ):
-                indiv = self.toolbox.Individual(individual)
-                indiv.fitness.values = individual_fitness  # TODO(Jules): Si valeur nulle alors calculer le fitness
-                population.append(indiv)
-            return last_computed_generation + 1, population
-        return 0, []
+        if self.save is not None:
+            self.logbook.to_parquet(self.save)
 
-    def _evaluate(
-        self: SimpleGeneticAlgorithm,
-        toolbox: base.Toolbox,
-        individuals: Sequence,
-        generation: int,
-    ) -> tuple[tools.Logbook, tools.HallOfFame]:
+    def _evaluate(self: SimpleGeneticAlgorithm, individuals: Sequence, generation: int) -> Logbook:
         """Evaluate the cost function of all new individuals and update the statistiques."""
-        # 1 - UPDATE POPULATION
-        known = [ind.fitness.valid for ind in individuals]
-        invalid_ind = [ind for ind in individuals if not ind.fitness.valid]
-        if self.client is None:
-            fitnesses = list(map(toolbox.evaluate, invalid_ind))
-        else:
-            futures_results = self.client.map(toolbox.evaluate, invalid_ind)
-            fitnesses = self.client.gather(futures_results)
-        for ind, fit in zip(invalid_ind, fitnesses):
-            ind.fitness.values = fit
 
-        # 2 - GENERATE LOGBOOK
-        df_logbook = pd.DataFrame(
-            individuals,
-            columns=self.cost_function.functional_groups.unique_functional_groups_parameters_ordered().keys(),
+        def update_fitness(individuals: list) -> list:
+            known = [ind.fitness.valid for ind in individuals]
+            invalid_ind = [ind for ind in individuals if not ind.fitness.valid]
+            if self.client is None:
+                fitnesses = list(map(self.toolbox.evaluate, invalid_ind))
+            else:
+                futures_results = self.client.map(self.toolbox.evaluate, invalid_ind)
+                fitnesses = self.client.gather(futures_results)
+            for ind, fit in zip(invalid_ind, fitnesses, strict=True):
+                ind.fitness.values = fit
+            return known
+
+        known = update_fitness(individuals)
+
+        return Logbook.from_individual(
+            generation=generation,
+            is_from_previous_generation=known,
+            individual=individuals,
+            parameter_names=self.cost_function.functional_groups.unique_functional_groups_parameters_ordered().keys(),
+            fitness_name=[obs.name for obs in self.cost_function.observations],
         )
-        scores = [ind.fitness.values for ind in individuals]
-        final_scores = np.dot(scores, self.meta_parameter.cost_function_weight)
-        df_logbook["fitness"] = scores
-        df_logbook["fitness_final"] = final_scores
-        df_logbook["previous_generation"] = known
-        df_logbook["generation"] = generation
-        df_logbook.index.name = "individual"
-        df_logbook = df_logbook.reset_index()
-        return df_logbook.set_index(["generation", "previous_generation", "individual"]).sort_index()
 
-    def optimize(self: SimpleGeneticAlgorithm) -> GeneticAlgorithmViewer:
+    def _initialization(self: SimpleGeneticAlgorithm) -> tuple[int, list[list]]:
+        """Initialize the genetic algorithm. If a logbook is provided, it will load the last generation."""
+
+        def create_first_generation() -> tuple[Literal[1], list[list]]:
+            """Create the first generation (i.e. generation `0`) of individuals."""
+            new_generation = 0
+            population = self.toolbox.population(n=self.meta_parameter.POP_SIZE)
+            logbook = self._evaluate(individuals=population, generation=new_generation)
+            self.update_logbook(logbook)
+            next_generation = new_generation + 1
+            return next_generation, population
+
+        def create_population_from_logbook(population_unprocessed: pd.DataFrame) -> list[list]:
+            """Create a population from the logbook DataFrame."""
+            individuals = population_unprocessed.loc[:, [LogbookCategory.PARAMETER]].to_numpy()
+            fitness = list(population_unprocessed.loc[:, [LogbookCategory.FITNESS]].itertuples(index=False, name=None))
+            fitness = [() if np.nan in fit else fit for fit in fitness]
+            return [
+                self.toolbox.Individual(iterator=iterator, values=values)
+                for iterator, values in zip(individuals, fitness, strict=True)
+            ]
+
+        if self.logbook is None:
+            return create_first_generation()
+
+        logger.info("Logbook found. Loading last generation.")
+
+        last_computed_generation = self.logbook.index.get_level_values(LogbookIndex.GENERATION).max()
+        population_unprocessed = self.logbook.loc[last_computed_generation]
+        population = create_population_from_logbook(population_unprocessed)
+
+        if any(population_unprocessed[LogbookCategory.FITNESS].isna()):
+            logger.warning("Some individuals in the logbook have no fitness values. Re-evaluating the population.")
+            logbook = self._evaluate(population, last_computed_generation)
+            self.logbook = None
+            self.update_logbook(logbook)
+
+        return last_computed_generation + 1, population
+
+    def optimize(self: SimpleGeneticAlgorithm) -> None:  # -> GeneticAlgorithmViewer:
         """This is the main function. Use it to optimize your model."""
+        generation_start, population = self._initialization()
 
-        def update_logbook(logbook: tools.Logbook) -> None:
-            """Update the logbook."""
-            if self.logbook is None:
-                self.logbook = logbook
-            else:
-                self.logbook = pd.concat([self.logbook, logbook])
+        for gen in range(generation_start, self.meta_parameter.NGEN):
+            offspring = self.toolbox.select(population, self.meta_parameter.POP_SIZE)
+            offspring = self.meta_parameter.variation(
+                offspring, self.toolbox, self.meta_parameter.CXPB, self.meta_parameter.MUTPB
+            )
+            logbook = self._evaluate(offspring, gen)
 
-        first_generation, population = self._initialization()
+            self.update_logbook(logbook)
+            population[:] = offspring
 
-        for gen in tqdm(desc="Generations", iterable=range(first_generation, self.meta_parameter.NGEN)):
-            if gen == 0:
-                population = self.toolbox.population(n=self.meta_parameter.POP_SIZE)
-                df_logbook = self._evaluate(self.toolbox, population, gen)
-            else:
-                offspring = self.toolbox.select(population, len(population))
-                offspring = self.meta_parameter.variation(
-                    offspring, self.toolbox, self.meta_parameter.CXPB, self.meta_parameter.MUTPB
-                )
-                df_logbook = self._evaluate(self.toolbox, offspring, gen)
-                population[:] = offspring
-
-            update_logbook(df_logbook)
-            clear_output(wait=True)
-            display(_compute_stats(self.logbook))
-            if self.logbook_path is not None:
-                self.logbook.to_json(self.logbook_path, orient="table")
-
-        return GeneticAlgorithmViewer(
-            parameters=self.cost_function.functional_groups,
-            forcing_parameters=self.cost_function.forcing_parameters,
-            logbook=self.logbook.copy(),
-            observations=self.cost_function.observations,
-        )
+        # return GeneticAlgorithmViewer(
+        #     parameters=self.cost_function.functional_groups,
+        #     forcing_parameters=self.cost_function.forcing_parameters,
+        #     logbook=self.logbook.copy(),
+        #     observations=self.cost_function.observations,
+        # )
