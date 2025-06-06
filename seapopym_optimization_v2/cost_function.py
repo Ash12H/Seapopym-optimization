@@ -142,7 +142,6 @@ class Observation:
         root: bool = False,
         normalized: bool = False,
         log_transform: bool =False,
-        eps: float = 1e-6,
     ) -> tuple[float | None, float | None]:
         """
         Return the mean square error of the predicted and observed biomass.
@@ -167,8 +166,8 @@ class Observation:
         def _mse(pred: xr.DataArray, obs: xr.DataArray) -> float:
             """Mean square error applied to xr.DataArray."""
             if log_transform:
-                pred=np.log10(np.maximum(pred,eps)) # avoid log(0)
-                obs=np.log10(np.maximum(obs,eps))
+                pred=np.log10(np.maximum(pred,np.finfo(float).eps)) # avoid log(0)
+                obs=np.log10(np.maximum(obs,np.finfo(float).eps))
             if centered:
                 cost = float(((pred - pred.mean()) - (obs - obs.mean())).mean() ** 2)
             else:
@@ -458,20 +457,20 @@ class GAMPteropodCostFunction(GenericCostFunction):
         """Check that the kwargs are set."""
         super().__post_init__()
 
-    def decompose_GAM(self,data,variable,eps: float = 1e-6):
+    def decompose_GAM(self,data,variable):
         """Decompose time series using GAM model into trend and seasonality, 
         all the calculations are in the log10 base
         
         Parameters:
-             data (dataframe): must contain 'time' and the target variable to decompose
-             variable (str) : name of the variable in the model
-             eps (float): small value to avoid log(0)
+            data (dataframe): must contain 'time' and the target variable to decompose
+            variable (str) : name of the variable in the model
+            
         Returns:
             (trend_df,season_df):DataFrame with 'time' and 'biomass' columns
         
         """
         data=data.copy()
-        data[variable]=np.log10(np.maximum(data[variable],eps)) # log10 transformation, epsilon to avoid log(0) 
+        data[variable]=np.log10(np.maximum(data[variable],np.finfo(float).eps)) # log10 transformation, epsilon to avoid log(0) 
 
         data = data.dropna().reset_index(drop=True)
         data['time_float'] = (data['time'] - data['time'].min()).dt.total_seconds() / (3600 * 24)
@@ -503,10 +502,20 @@ class GAMPteropodCostFunction(GenericCostFunction):
 
         return trend_df,season_df
 
+    def RMSE(self,obs,pred):
+        """compute squared, normalised RMSE"""
+        # align in time obs and pred
+        df=pd.merge(obs,pred,on="time",how="inner",suffixes=("_obs","_pred"))
+        # compute RMSE
+        cost=float(((df["biomass_obs"]-df["biomass_pred"])**2).mean())
+        cost=np.sqrt(cost)
+        cost/=float(df["biomass_obs"].std())
+        return cost
+        
     def _cost_function(
         self: GAMPteropodCostFunction,
         args: np.ndarray,
-        forcing_parameters: acidity.ForcingParameter,
+        forcing_parameters: ForcingParameter,
         observations: Sequence[Observation],
         environment_parameters: EnvironmentParameter | None = None,
         kernel_parameters: KernelParameter | None = None,
@@ -516,9 +525,9 @@ class GAMPteropodCostFunction(GenericCostFunction):
         day_layers = filled_args[:, NO_TRANSPORT_DAY_LAYER_POS].flatten()
         night_layers = filled_args[:, NO_TRANSPORT_NIGHT_LAYER_POS].flatten()
 
-        fg_parameters = FunctionalGroupGeneratorAcidity(filled_args, groups_name)
+        fg_parameters = FunctionalGroupGeneratorNoTransport(filled_args, groups_name)
 
-        model = model_generator_acidity(
+        model = model_generator_no_transport(
             forcing_parameters,
             fg_parameters,
             environment_parameters=environment_parameters,
@@ -528,16 +537,6 @@ class GAMPteropodCostFunction(GenericCostFunction):
         model.run()
 
         predicted_biomass = model.state["biomass"]
-
-        def RMSE(obs,pred):
-            """compute squared, normalised RMSE"""
-            # align in time obs and pred
-            df=pd.merge(obs,pred,on="time",how="inner",suffixes=("_obs","_pred"))
-            # compute RMSE
-            cost=float(((df["biomass_obs"]-df["biomass_pred"])**2).mean())
-            cost=np.sqrt(cost)
-            cost/=float(df["biomass_obs"].std())
-            return cost
 
         cost=[]
         for obs in observations:
@@ -555,9 +554,65 @@ class GAMPteropodCostFunction(GenericCostFunction):
             obs_trend, obs_season = self.decompose_GAM(obs_df, "day")
             pred_trend, pred_season = self.decompose_GAM(pred_df, "biomass")
 
-            rmse_trend = self.weights[0]*RMSE(obs_trend, pred_trend)
-            rmse_season = self.weights[1]*RMSE(obs_season, pred_season)
+            rmse_trend = self.weights[0]*self.RMSE(obs_trend, pred_trend)
+            rmse_season = self.weights[1]*self.RMSE(obs_season, pred_season)
 
             cost.append(rmse_trend + rmse_season)
                 
+        return tuple(cost)
+
+@dataclass
+class GAMPteropodAcidityCostFunction(GAMPteropodCostFunction):
+    """
+    Cost function using GAM decomposition (trend/seasonality/residuals)
+    for the SeapoPym Acidity model.
+    """
+
+    def _cost_function(
+        self: GAMPteropodAcidityCostFunction,
+        args: np.ndarray,
+        forcing_parameters: acidity.ForcingParameter,
+        observations: Sequence[Observation],
+        environment_parameters: EnvironmentParameter | None = None,
+        kernel_parameters: KernelParameter | None = None,
+    ) -> tuple:
+        groups_name = self.functional_groups.functional_groups_name
+        filled_args = self.functional_groups.generate_matrix(args)
+
+        fg_parameters = FunctionalGroupGeneratorAcidity(filled_args, groups_name)
+
+        model = model_generator_acidity(
+            forcing_parameters,
+            fg_parameters,
+            environment_parameters=environment_parameters,
+            kernel_parameters=kernel_parameters,
+        )
+
+        model.run()
+
+        predicted_biomass = model.state["biomass"]
+
+        cost = []
+        for obs in observations:
+            predicted = obs._helper_resample_data_by_time_type(predicted_biomass)
+            predicted = predicted.pint.quantify().pint.to(BIOMASS_UNITS).pint.dequantify()
+            obs.observation = obs.observation.pint.quantify().pint.to(BIOMASS_UNITS).pint.dequantify()
+
+            obs_df = pd.DataFrame({
+                "time": obs.observation["time"].values,
+                "day": obs.observation.to_array().squeeze().values
+            })
+            pred_df = pd.DataFrame({
+                "time": predicted["time"].values[3:],  # skip spin-up
+                "biomass": predicted.squeeze().values[3:]
+            })
+
+            obs_trend, obs_season = self.decompose_GAM(obs_df, "day")
+            pred_trend, pred_season = self.decompose_GAM(pred_df, "biomass")
+
+            rmse_trend = self.weights[0] * self.RMSE(obs_trend, pred_trend)
+            rmse_season = self.weights[1] * self.RMSE(obs_season, pred_season)
+
+            cost.append(rmse_trend + rmse_season)
+
         return tuple(cost)
