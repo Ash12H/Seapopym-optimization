@@ -25,6 +25,10 @@ class LogbookIndex(StrEnum):
     PREVIOUS_GENERATION = "Is_From_Previous_Generation"
     INDIVIDUAL = "Individual"
 
+    def get_index(self: LogbookIndex) -> str:
+        """Get the index for the logbook category."""
+        return list(LogbookIndex).index(self)
+
 
 parameter_column_schema = pa.Column(regex=True)
 fitness_column_schema = pa.Column(regex=True, nullable=True)
@@ -117,17 +121,3 @@ class Logbook(DataFrame[logbook_schema]):
             raise TypeError(msg)
 
         return Logbook(pd.concat([self, new_generation]))
-
-
-if __name__ == "__main__":
-    # For testing purposes, we can validate an empty DataFrame against the schema
-    import pandas as pd
-
-    index = pd.MultiIndex.from_tuples(
-        [(0, False, 0)],
-        names=[LogbookIndex.GENERATION, LogbookIndex.PREVIOUS_GENERATION, LogbookIndex.INDIVIDUAL],
-    )
-    empty_df = Logbook(index=index, columns=logbook_schema.columns, data=[[1, 1, 1]])
-
-    validated_df = logbook_schema.validate(empty_df)
-    print("Empty DataFrame validated successfully:\n", validated_df)

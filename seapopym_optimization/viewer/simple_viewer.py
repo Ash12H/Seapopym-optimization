@@ -13,11 +13,13 @@ import plotly.graph_objects as go
 import xarray as xr
 from plotly.subplots import make_subplots
 from scipy.stats import entropy
+from seapopym.standard.labels import ForcingLabels
 from sklearn.preprocessing import QuantileTransformer
 
-from seapopym_optimization.cost_function.observations import TimeSeriesObservation
+from seapopym_optimization.cost_function.observations import DayCycle, TimeSeriesObservation
+from seapopym_optimization.functional_group.base_functional_group import FunctionalGroupSet
 from seapopym_optimization.genetic_algorithm.simple_logbook import Logbook, LogbookCategory, LogbookIndex
-from seapopym_optimization.model_generator import base_model_generator
+from seapopym_optimization.model_generator.base_model_generator import AbstractModelGenerator
 from seapopym_optimization.viewer.base_viewer import AbstractViewer
 
 if TYPE_CHECKING:
@@ -46,16 +48,52 @@ def compute_stats(logbook: Logbook) -> pd.DataFrame:
 
 
 @dataclass
+class SimulationManager:
+    """Manages a set of parameter sets and caches simulation results to avoid unnecessary recalculations."""
+
+    param_sets: Logbook
+    model_generator: AbstractModelGenerator
+    functional_groups: FunctionalGroupSet
+    _cache: list[xr.DataArray] = field(default_factory=list)
+
+    def run_first(self, n: int) -> xr.DataArray:
+        """Returns the results of the first n parameter sets. Missing simulations are executed and cached."""
+        if not 0 <= n <= len(self.param_sets):
+            msg = f"n must be between 0 and {len(self.param_sets)}"
+            raise ValueError(msg)
+
+        for i in range(len(self._cache), n):
+            args = self.param_sets.iloc[[i]][LogbookCategory.PARAMETER].to_numpy()[0]
+            model = self.model_generator.generate(
+                functional_group_names=self.functional_groups.functional_groups_name(),
+                functional_group_parameters=self.functional_groups.generate(args),
+            )
+            model.run()
+            result = model.state[ForcingLabels.biomass]
+            self._cache.append(result)
+
+        return xr.concat(self._cache[:n], dim="individual")
+
+
+@dataclass
 class SimpleViewer(AbstractViewer):
     """
     Structure that contains the output of the optimization. Use the representation to plot some informations about the
     results.
     """
 
-    logbook: Logbook
     observations: Sequence[TimeSeriesObservation]
     cost_function_weight: tuple[Number]
-    _nbest_simulations: xr.Dataset = field(init=False, default=None)
+
+    simulation_manager: SimulationManager = field(init=False, default=None, repr=False)
+
+    def __post_init__(self: SimpleViewer) -> None:
+        """Initialize the simulation manager."""
+        self.simulation_manager = SimulationManager(
+            param_sets=self.hall_of_fame(drop_duplicates=True),
+            model_generator=self.model_generator,
+            functional_groups=self.functional_group_set,
+        )
 
     @property
     def parameters_names(self: SimpleViewer) -> list[str]:
@@ -78,100 +116,49 @@ class SimpleViewer(AbstractViewer):
             for param in self.functional_group_set.unique_functional_groups_parameters_ordered().values()
         ]
 
-    @property
     def stats(self: SimpleViewer) -> pd.DataFrame:
         """A review of the generations stats."""
         return compute_stats(self.logbook)
 
-    @property
-    def hall_of_fame(self: SimpleViewer) -> pd.DataFrame:
+    def hall_of_fame(self: SimpleViewer, *, drop_duplicates: bool = True) -> pd.DataFrame:
         """The best individuals and their fitness."""
         logbook = self.logbook.copy()
-        condition_not_inf = np.isfinite(logbook.loc[:, LogbookCategory.WEIGHTED_FITNESS])
-        condition_not_already_calculated = ~logbook.index.get_level_values(LogbookIndex.PREVIOUS_GENERATION)
-        condition = condition_not_inf & condition_not_already_calculated
-        previous_generation_level = 1
-        return (
-            logbook[condition]
-            .sort_values(LogbookCategory.WEIGHTED_FITNESS, ascending=False)
-            .droplevel(previous_generation_level)
+        condition_not_inf = np.isfinite(logbook[LogbookCategory.WEIGHTED_FITNESS, LogbookCategory.WEIGHTED_FITNESS])
+        logbook = logbook[condition_not_inf]
+        if drop_duplicates:
+            logbook = logbook.drop_duplicates(keep="first")
+        return logbook.sort_values(
+            (LogbookCategory.WEIGHTED_FITNESS, LogbookCategory.WEIGHTED_FITNESS), ascending=False
         )
 
-    @property
-    def best_simulation(self: SimpleViewer) -> xr.Dataset:
-        if self._nbest_simulations is not None:
-            return self._nbest_simulations.sel(individual=0)
-
-        return self.best_individuals_simulations(nbest=1)
-
-    def best_individuals_simulations(self: SimpleViewer, nbest: int, client: Client | None = None) -> xr.Dataset:
-        min_nbest = 0
-        if self._nbest_simulations is not None:
-            if nbest <= self._nbest_simulations.sizes["individual"]:
-                return self._nbest_simulations.sel(individual=slice(None, nbest - 1))
-
-            min_nbest = self._nbest_simulations.sizes["individual"]
-
-        individuals_parameterization = []
-        for cpt, (_, individual_parameters) in enumerate(self.hall_of_fame[min_nbest:nbest].iterrows()):
-            individuals_parameterization.append(
-                (
-                    min_nbest + cpt,
-                    self.parameters.generate_matrix([individual_parameters[name] for name in self.parameters_names]),
-                )
-            )
-
-        def run_simulation(individual: tuple[int, np.ndarray]):
-            """Take an individual as (number, parameters) and run the simulation."""
-            model = base_model_generator.model_generator_no_transport(
-                forcing_parameters=self.forcing_parameters,
-                fg_parameters=base_model_generator.FunctionalGroupGeneratorNoTransport(
-                    parameters=individual[1], groups_name=self.parameters.functional_groups_name
-                ),
-            )
-            model.run()
-            return model.export_biomass().expand_dims({"individual": [individual[0]]})
-
-        if client is None:
-            biomass_accumulated = [run_simulation(individual) for individual in individuals_parameterization]
-        else:
-            biomass_accumulated = client.map(run_simulation, individuals_parameterization)
-            biomass_accumulated = client.gather(biomass_accumulated)
-
-        if self._nbest_simulations is not None:
-            self._nbest_simulations = xr.concat([self._nbest_simulations, *biomass_accumulated], dim="individual")
-        else:
-            self._nbest_simulations = xr.concat(biomass_accumulated, dim="individual")
-
-        return self._nbest_simulations
-
-    def fitness_evolution(self: SimpleViewer, *, log_y: bool = True) -> Figure:
+    def fitness_evolution(self: SimpleViewer, *, points: bool = False, log_y: bool = False) -> Figure:
         """Print the evolution of the fitness by generation."""
-        data = self.logbook[np.isfinite(self.logbook["fitness"])]["fitness"].reset_index()
-        figure = px.box(data_frame=data, x="generation", y="fitness", points=False, log_y=log_y)
+        data = self.logbook[LogbookCategory.WEIGHTED_FITNESS].reset_index()
+        data = data[np.isfinite(data[LogbookCategory.WEIGHTED_FITNESS])]
+        figure = px.violin(
+            data_frame=data,
+            x=LogbookIndex.GENERATION,
+            y=LogbookCategory.WEIGHTED_FITNESS,
+            box=True,
+            points=points,
+            log_y=log_y,
+        )
 
-        median_values = data.groupby("generation").median().reset_index()
+        median_values = data.groupby(LogbookIndex.GENERATION).median().reset_index()
         figure.add_scatter(
-            x=median_values["generation"],
-            y=median_values["fitness"],
+            x=median_values[LogbookIndex.GENERATION],
+            y=median_values[LogbookCategory.WEIGHTED_FITNESS],
             mode="lines",
             line={"color": "rgba(0,0,0,0.5)", "width": 2, "dash": "dash"},
             name="Median",
         )
 
-        min_values = data.groupby("generation").min().reset_index()
-        figure.add_scatter(
-            x=min_values["generation"],
-            y=min_values["fitness"],
-            mode="lines",
-            line={"color": "rgba(0,0,0,0.5)", "width": 2, "dash": "dash"},
-            name="Minimum",
-        )
-
         figure.update_layout(title_text="Fitness evolution")
         return figure
 
-    def box_plot(self: SimpleViewer, columns_number: int, nbest: int | None = None) -> go.Figure:
+    def box_plot(
+        self: SimpleViewer, columns_number: int, nbest: int | None = None, *, drop_duplicates: bool = False
+    ) -> go.Figure:
         """Print the `nbest` best individuals in the hall_of_fame as box plots."""
         nb_fig = len(self.parameters_names)
         nb_row = nb_fig // columns_number + (1 if nb_fig % columns_number > 0 else 0)
@@ -184,15 +171,17 @@ class SimpleViewer(AbstractViewer):
             vertical_spacing=0.1,
         )
 
+        hof = self.hall_of_fame(drop_duplicates=drop_duplicates)
+
         if nbest is None:
-            nbest = len(self.hall_of_fame)
+            nbest = len(hof)
 
         for i, (pname, lbound, ubound) in enumerate(
-            zip(self.parameters_names, self.parameters_lower_bounds, self.parameters_upper_bound)
+            zip(self.parameters_names, self.parameters_lower_bounds, self.parameters_upper_bound, strict=True)
         ):
             fig.add_trace(
                 px.box(
-                    data_frame=self.hall_of_fame[:nbest],
+                    data_frame=hof.iloc[:nbest][LogbookCategory.PARAMETER],
                     y=pname,
                     range_y=[lbound, ubound],  # Not working with "add_trace" function.
                     title=pname,
@@ -225,14 +214,16 @@ class SimpleViewer(AbstractViewer):
         if colorscale is None:
             colorscale = px.colors.diverging.Portland
 
-        hof_fitness = self.hall_of_fame
+        hof_fitness = self.hall_of_fame(drop_duplicates=True)
 
         if nbest is not None:
             hof_fitness = hof_fitness.iloc[:nbest]
 
         if uniformed:
             transformer = QuantileTransformer(output_distribution="uniform")
-            hof_fitness["fitness"] = transformer.fit_transform(hof_fitness[["fitness"]])
+            hof_fitness[LogbookCategory.WEIGHTED_FITNESS] = transformer.fit_transform(
+                hof_fitness[[LogbookCategory.WEIGHTED_FITNESS]]
+            )
 
         if parameter_groups is None:
             parameter_groups = [self.parameters_names]
@@ -247,7 +238,7 @@ class SimpleViewer(AbstractViewer):
                         self.parameters_upper_bound[self.parameters_names.index(param)],
                     ],
                     "label": param,
-                    "values": hof_fitness[param],
+                    "values": hof_fitness[LogbookCategory.PARAMETER, param],
                 }
                 for param in group
             ]
@@ -256,14 +247,20 @@ class SimpleViewer(AbstractViewer):
             fig = go.Figure(
                 data=go.Parcoords(
                     line={
-                        "color": -hof_fitness["fitness"],
+                        "color": -hof_fitness[LogbookCategory.WEIGHTED_FITNESS],
                         "colorscale": colorscale,
                         "showscale": True,
                         "colorbar": {
                             "title": "Cost function score",
-                            "tickvals": [-hof_fitness["fitness"].min(), -hof_fitness["fitness"].max()],
+                            "tickvals": [
+                                -hof_fitness[LogbookCategory.WEIGHTED_FITNESS].min(),
+                                -hof_fitness[LogbookCategory.WEIGHTED_FITNESS].max(),
+                            ],
                             "tickmode": "array",
-                            "ticktext": [hof_fitness["fitness"].min(), hof_fitness["fitness"].max()],
+                            "ticktext": [
+                                hof_fitness[LogbookCategory.WEIGHTED_FITNESS].min(),
+                                hof_fitness[LogbookCategory.WEIGHTED_FITNESS].max(),
+                            ],
                         },
                         "reversescale": True,
                     },
@@ -276,7 +273,10 @@ class SimpleViewer(AbstractViewer):
 
             fig.update_layout(
                 coloraxis_colorbar={"title": "Fitness (uniforme distribution)" if uniformed else "Cost function score"},
-                title_text=f"Parameters optimization : minimization of the cost function for group {parameter_groups.index(group) + 1}",
+                title_text=(
+                    "Parameters optimization : minimization of the cost function for group "
+                    f"{parameter_groups.index(group) + 1}"
+                ),
             )
             figures.append(fig)
 
@@ -284,14 +284,14 @@ class SimpleViewer(AbstractViewer):
 
     def parameters_standardized_deviation(self: SimpleViewer) -> go.Figure:
         """Print the standardized deviation of the parameters by generation."""
-        param_range = {
-            name: ub - lb
-            for name, ub, lb in zip(self.parameters_names, self.parameters_upper_bound, self.parameters_lower_bounds)
-        }
+        param_range = pd.Series(
+            np.subtract(self.parameters_upper_bound, self.parameters_lower_bounds), index=self.parameters_names
+        )
         param_std = (
-            self.logbook.reset_index()
-            .drop(columns=[LogbookIndex.PREVIOUS_GENERATION.value, "individual", "fitness"])
-            .groupby("generation")
+            self.logbook[LogbookCategory.PARAMETER]
+            .droplevel(level=[LogbookIndex.PREVIOUS_GENERATION.get_index(), LogbookIndex.INDIVIDUAL.get_index()])
+            .reset_index()
+            .groupby(LogbookIndex.GENERATION)
             .std()
         )
         param_standardized_std = param_std / param_range
@@ -329,11 +329,11 @@ class SimpleViewer(AbstractViewer):
             hist_p += 1e-10
             return entropy(hist_p / np.sum(hist_p))
 
-        data = self.logbook.reset_index()
+        data = self.logbook[LogbookCategory.PARAMETER].reset_index()
 
         entropies = {}
-        for generation in data["generation"].unique():
-            data_gen = data[data["generation"] == generation]
+        for generation in data[LogbookIndex.GENERATION].unique():
+            data_gen = data[data[LogbookIndex.GENERATION] == generation]
             gen_entropy = {k: compute_shannon_entropy(v) for k, v in data_gen.items() if k in self.parameters_names}
             entropies[generation] = gen_entropy
 
@@ -356,6 +356,123 @@ class SimpleViewer(AbstractViewer):
             markers=True,
         ).update_layout(xaxis_showgrid=False, yaxis_showgrid=False, plot_bgcolor="rgba(0, 0, 0, 0)")
 
+    def time_series(self: SimpleViewer, nbest: int, title: Iterable[str] | None = None) -> list[go.Figure]:
+        """Plot the time series of the best simulations for each observation."""
+
+        def _plot_observation(observation: xr.DataArray, day_cycle: str, layer: int) -> go.Scatter:
+            y = observation.sel(layer=layer)
+            x = y.cf["T"]
+            return go.Scatter(
+                x=x,
+                y=y,
+                mode="lines+markers",
+                name=f"Observed {day_cycle} layer {layer}",
+                line={"dash": "dash", "width": 1, "color": "black"},
+                marker={"size": 4, "symbol": "x", "color": "black"},
+            )
+
+        def _compute_fgroup_in_layer(day_cycle: DayCycle, layer: int) -> list[int]:
+            return [
+                fg_index
+                for fg_index, fg in enumerate(self.functional_group_set.functional_groups)
+                if (fg.night_layer == layer and day_cycle == DayCycle.DAY)
+                or (fg.day_layer == layer and day_cycle == DayCycle.Night)
+            ]
+
+        def _plot_best_prediction(
+            prediction: xr.DataArray, fgroup: Iterable[int], day_cycle: DayCycle, layer: int
+        ) -> go.Scatter:
+            y = prediction.sel(functional_group=fgroup, individual=0).sum("functional_group")
+            x = y.cf["T"]
+            return go.Scatter(
+                x=x,
+                y=y,
+                mode="lines",
+                name=f"Predicted {day_cycle} layer {layer}",
+                line={
+                    "dash": "solid",
+                    "width": 2,
+                    "color": "royalblue" if day_cycle == "night" else "firebrick",
+                },
+            )
+
+        def _plot_range_best_predictions(
+            prediction: xr.DataArray, fgroup: Iterable[int], nbest: int, day_cycle: DayCycle, layer: int
+        ) -> None:
+            y = prediction.sel(functional_group=fgroup).sum("functional_group")  # total biomass in layer
+            x = prediction.time.to_series()
+            x_rev = pd.concat([x, x[::-1]])
+            y_upper = y.max("individual")
+            y_lower = y.min("individual")[::-1]
+            y_rev = np.concatenate([y_upper, y_lower])
+
+            return go.Scatter(
+                x=x_rev,
+                y=y_rev,
+                fill="toself",
+                line_color="rgba(0,0,0,0)",
+                fillcolor="rgba(54,92,216,0.3)" if day_cycle == "night" else "rgba(174,30,36,0.3)",
+                name=f"{day_cycle} layer {layer} : {nbest} best individuals",
+            )
+
+        best_simulations = self.simulation_manager.run_first(nbest)
+        best_simulations = best_simulations.pint.quantify().pint.to("milligram / meter ** 2").pint.dequantify()
+
+        nb_columns = 2  # day, night
+        layer_pos = np.ravel([(fg.day_layer, fg.night_layer) for fg in self.functional_group_set.functional_groups])
+        upper_layer_pos = layer_pos.min()
+        lower_layer_pos = layer_pos.max()
+        nb_rows = int(lower_layer_pos - upper_layer_pos + 1)
+
+        all_figures = []
+        for fig_nb, observation in enumerate(self.observations):
+            figure = make_subplots(
+                rows=nb_rows,
+                cols=nb_columns,
+                x_title="Time",
+                y_title="Biomass (mg/m2)",
+                row_titles=[f"Layer {layer}" for layer in np.sort(np.unique(layer_pos))],
+                subplot_titles=["Day", "Night"],
+                horizontal_spacing=0.1,
+                vertical_spacing=0.1,
+            )
+            obs_data: xr.DataArray = (
+                observation.observation.pint.quantify().pint.to("milligram / meter ** 2").pint.dequantify()
+            )
+            best_simulations_sel = best_simulations.cf.sel(X=obs_data.cf["X"], Y=obs_data.cf["Y"]).cf.mean(["X", "Y"])
+            obs_data = obs_data.cf.mean(["X", "Y"])
+            column = 1 if observation.observation_type == DayCycle.DAY else 2
+
+            for layer in np.unique(layer_pos):
+                row = int(layer - upper_layer_pos) + 1  # 1-indexed
+                fgroup = _compute_fgroup_in_layer(observation.observation_type, layer)
+                if len(fgroup) > 0:
+                    figure.add_trace(
+                        _plot_best_prediction(best_simulations_sel, fgroup, observation.observation_type, layer),
+                        row=row,
+                        col=column,
+                    )
+                    figure.add_trace(
+                        _plot_range_best_predictions(
+                            best_simulations_sel, fgroup, nbest, observation.observation_type, layer
+                        ),
+                        row=row,
+                        col=column,
+                    )
+
+                if layer in obs_data.layer and obs_data.sel(layer=layer).sum() > 0:
+                    figure.add_trace(
+                        _plot_observation(obs_data, observation.observation_type, layer), row=row, col=column
+                    )
+            figure.update_layout(title=f"{title[fig_nb]}" if title is not None else observation.name)
+            all_figures.append(figure)
+
+        return all_figures
+
+    # ---------------------------------------------------------------------------------------------------------------- #
+    # TODO(Jules): Finish adaptation of following functions
+    # ---------------------------------------------------------------------------------------------------------------- #
+
     def parameters_scatter_matrix(
         self: SimpleViewer,
         nbest: int | None = None,
@@ -375,7 +492,7 @@ class SimpleViewer(AbstractViewer):
             dimensions=data.columns[:-1],
             height=size,
             width=size,
-            color="fitness",
+            color=LogbookCategory.WEIGHTED_FITNESS,
             color_continuous_scale=[
                 (0, "rgba(0,0,255,1)"),
                 (0.3, "rgba(255,0,0,0.8)"),
@@ -425,123 +542,8 @@ class SimpleViewer(AbstractViewer):
         )
         return fig
 
-    def time_series(self: SimpleViewer, nbest: int, title: Iterable[str] | None = None, client=None) -> list[go.Figure]:
-        def _plot_observation(observation: xr.DataArray, day_cycle: str, layer: int) -> go.Scatter:
-            y = observation.sel(layer=layer)
-            x = y.cf["T"]
-            return go.Scatter(
-                x=x,
-                y=y,
-                mode="lines+markers",
-                name=f"Observed {day_cycle} layer {layer}",
-                line={"dash": "dash", "width": 1, "color": "black"},
-                marker={"size": 4, "symbol": "x", "color": "black"},
-            )
-
-        def _compute_fgroup_in_layer(day_cycle: str, layer: int) -> list[int]:
-            return [
-                fg_index
-                for fg_index, fg in enumerate(self.parameters.functional_groups)
-                if (fg.night_layer == layer and day_cycle == "night") or (fg.day_layer == layer and day_cycle == "day")
-            ]
-
-        def _plot_best_prediction(
-            prediction: xr.DataArray, fgroup: Iterable[int], day_cycle: str, layer: int
-        ) -> go.Scatter:
-            y = prediction.sel(functional_group=fgroup, individual=0).sum("functional_group")
-            x = y.cf["T"]
-            return go.Scatter(
-                x=x,
-                y=y,
-                mode="lines",
-                name=f"Predicted {day_cycle} layer {layer}",
-                line={
-                    "dash": "solid",
-                    "width": 2,
-                    "color": "royalblue" if day_cycle == "night" else "firebrick",
-                },
-            )
-
-        def _plot_range_best_predictions(
-            prediction: xr.DataArray, fgroup: Iterable[int], nbest: int, day_cycle: str, layer: int
-        ) -> None:
-            y = prediction.sel(functional_group=fgroup).sum("functional_group")
-            x = best_simulations.time.to_series()
-            x_rev = pd.concat([x, x[::-1]])
-            y_upper = y.max("individual")
-            y_lower = y.min("individual")[::-1]
-            y_rev = np.concatenate([y_upper, y_lower])
-
-            return go.Scatter(
-                x=x_rev,
-                y=y_rev,
-                fill="toself",
-                line_color="rgba(0,0,0,0)",
-                fillcolor="rgba(54,92,216,0.3)" if day_cycle == "night" else "rgba(174,30,36,0.3)",
-                name=f"{day_cycle} layer {layer} : {nbest} best individuals",
-            )
-
-        best_simulations = self.best_individuals_simulations(nbest, client=client)
-        best_simulations = best_simulations.pint.quantify().pint.to("milligram / meter ** 2")
-
-        # ------------------------------------------------------------------------------------------------------------ #
-
-        # ------------------------------------------------------------------------------------------------------------ #
-
-        # ------------------------------------------------------------------------------------------------------------ #
-
-        nb_columns = 2  # day, night
-        layer_pos = np.ravel([(fg.night_layer, fg.day_layer) for fg in self.parameters.functional_groups])
-        upper_layer_pos = layer_pos.min()
-        lower_layer_pos = layer_pos.max()
-        nb_rows = int(lower_layer_pos - upper_layer_pos + 1)
-
-        all_figures = []
-        for fig_nb, observation in enumerate(self.observations):
-            figure = make_subplots(
-                rows=nb_rows,
-                cols=nb_columns,
-                x_title="Time",
-                y_title="Biomass (mg/m2)",
-                row_titles=[f"Layer {layer}" for layer in np.sort(np.unique(layer_pos))],
-                subplot_titles=["Day", "Night"],
-                horizontal_spacing=0.1,
-                vertical_spacing=0.1,
-            )
-            obs_data: xr.Dataset = observation.observation.pint.quantify().pint.to("milligram / meter ** 2")
-            best_simulations_sel = best_simulations.cf.sel(X=obs_data.cf["X"], Y=obs_data.cf["Y"]).cf.mean(["X", "Y"])
-            obs_data = obs_data.cf.mean(["X", "Y"])
-
-            for column, day_cycle in enumerate(["day", "night"]):
-                col = column + 1  # 1-indexed
-                if day_cycle in obs_data:
-                    obs_data_selected = obs_data[day_cycle]
-                    for layer in np.unique(layer_pos):
-                        row = int(layer - upper_layer_pos) + 1  # 1-indexed
-                        fgroup = _compute_fgroup_in_layer(day_cycle, layer)
-                        if len(fgroup) > 0:
-                            figure.add_trace(
-                                _plot_best_prediction(best_simulations_sel, fgroup, day_cycle, layer), row=row, col=col
-                            )
-                            figure.add_trace(
-                                _plot_range_best_predictions(best_simulations_sel, fgroup, nbest, day_cycle, layer),
-                                row=row,
-                                col=col,
-                            )
-                        if layer in obs_data_selected.layer:
-                            figure.add_trace(_plot_observation(obs_data_selected, day_cycle, layer), row=row, col=col)
-
-                else:
-                    pass
-            figure.update_layout(title=f"{title[fig_nb]}")
-            all_figures.append(figure)
-
-        return all_figures
-
     # TODO(Jules) : Be able to zoom correlation axis. Like corr_range=[0.7, 1]
-    def taylor_diagram(
-        self: SimpleViewer, nbest: int = 1, client=None, range_theta: Iterable[int] = [0, 90]
-    ) -> go.Figure:
+    def taylor_diagram(self: SimpleViewer, nbest: int, client=None, range_theta: Iterable[int] = [0, 90]) -> go.Figure:
         best_simulations = self.best_individuals_simulations(nbest, client=client)
 
         day_layer = np.array([fg.day_layer for fg in self.parameters.functional_groups])
@@ -560,7 +562,7 @@ class SimpleViewer(AbstractViewer):
         night_color = "royalblue"
 
         for observation in self.observations:
-            for individual in best_simulations["individual"].data:
+            for individual in best_simulations[LogbookIndex.INDIVIDUAL].data:
                 # TODO(Jules): Add day / night as differents individuals
                 prediction = best_simulations.sel(individual=individual)
 

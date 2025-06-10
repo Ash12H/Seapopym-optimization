@@ -40,16 +40,6 @@ def aggregate_biomass_by_layer(
         .fillna(0)
         .rename(name)
     )
-    # # ---------------------------------------------------------------------------------------------------------------- #
-    # # NOTE(Jules): Old implementation, kept for reference.
-    # final_aggregated = []
-    # for layer_position in layer_coordinates:
-    #     functional_group = data[CoordinatesLabels.functional_group].data[(np.asarray(position) == layer_position)]
-    #     aggregated_predicted = data.sel(functional_group=functional_group).sum("functional_group")
-    #     aggregated_predicted = aggregated_predicted.expand_dims({layer_coordinates_name: [layer_position]})
-    #     final_aggregated.append(aggregated_predicted)
-    # return xr.concat(final_aggregated, dim=layer_coordinates_name).rename(name)
-    # # ---------------------------------------------------------------------------------------------------------------- #
 
 
 def root_mean_square_error(

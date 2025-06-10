@@ -221,7 +221,7 @@ class SimpleGeneticAlgorithm:
 
         return last_computed_generation + 1, population
 
-    def optimize(self: SimpleGeneticAlgorithm) -> None:  # -> GeneticAlgorithmViewer:
+    def optimize(self: SimpleGeneticAlgorithm) -> SimpleViewer:
         """This is the main function. Use it to optimize your model."""
         generation_start, population = self._initialization()
 
