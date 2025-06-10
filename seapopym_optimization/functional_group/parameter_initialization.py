@@ -31,7 +31,7 @@ def random_uniform_exclusive(lower: float, upper: float) -> float:
     """
     count = 0
     while count < MAXIMUM_INIT_TRY:
-        value = uniform(lower, upper)
+        value = uniform(lower, upper)  # noqa: S311
         if value not in (lower, upper):
             return value
         count += 1

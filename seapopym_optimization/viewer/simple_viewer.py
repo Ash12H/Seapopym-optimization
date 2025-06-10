@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from numbers import Number
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -17,16 +16,17 @@ from seapopym.standard.labels import ForcingLabels
 from sklearn.preprocessing import QuantileTransformer
 
 from seapopym_optimization.cost_function.observations import DayCycle, TimeSeriesObservation
-from seapopym_optimization.functional_group.base_functional_group import FunctionalGroupSet
 from seapopym_optimization.genetic_algorithm.simple_logbook import Logbook, LogbookCategory, LogbookIndex
-from seapopym_optimization.model_generator.base_model_generator import AbstractModelGenerator
 from seapopym_optimization.viewer.base_viewer import AbstractViewer
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
+    from numbers import Number
 
-    from dask.distributed import Client
     from plotly.graph_objects import Figure
+
+    from seapopym_optimization.functional_group.base_functional_group import FunctionalGroupSet
+    from seapopym_optimization.model_generator.base_model_generator import AbstractModelGenerator
 
 
 def compute_stats(logbook: Logbook) -> pd.DataFrame:

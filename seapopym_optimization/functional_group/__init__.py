@@ -1,2 +1,3 @@
 from .base_functional_group import Parameter
 from .no_transport_functional_groups import NoTransportFunctionalGroup
+from .acidity_functional_groups import AcidityFunctionalGroup
