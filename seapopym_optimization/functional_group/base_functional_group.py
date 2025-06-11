@@ -86,6 +86,12 @@ class FunctionalGroupSet:
 
     functional_groups: Sequence[AbstractFunctionalGroup]
 
+    def __post_init__(self: FunctionalGroupSet) -> None:
+        """Check that the functional groups are correctly defined."""
+        if not all(isinstance(group, AbstractFunctionalGroup) for group in self.functional_groups):
+            msg = "All functional groups must inherit from AbstractFunctionalGroup."
+            raise TypeError(msg)
+
     def functional_groups_name(self: FunctionalGroupSet) -> Sequence[str]:
         """Return the ordered list of the functional groups name."""
         return tuple(group.name for group in self.functional_groups)

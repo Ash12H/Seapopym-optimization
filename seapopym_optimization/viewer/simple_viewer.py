@@ -135,11 +135,10 @@ class SimpleViewer(AbstractViewer):
         """Print the evolution of the fitness by generation."""
         data = self.logbook[LogbookCategory.WEIGHTED_FITNESS].reset_index()
         data = data[np.isfinite(data[LogbookCategory.WEIGHTED_FITNESS])]
-        figure = px.violin(
+        figure = px.box(
             data_frame=data,
             x=LogbookIndex.GENERATION,
             y=LogbookCategory.WEIGHTED_FITNESS,
-            box=True,
             points=points,
             log_y=log_y,
         )
@@ -205,6 +204,7 @@ class SimpleViewer(AbstractViewer):
         uniformed: bool = False,
         parameter_groups: list[list[str]] | None = None,
         colorscale: list | str | None = None,
+        reversescale: bool = False,
         unselected_opacity: float = 0.2,
     ) -> list[Figure]:
         """
@@ -247,22 +247,11 @@ class SimpleViewer(AbstractViewer):
             fig = go.Figure(
                 data=go.Parcoords(
                     line={
-                        "color": -hof_fitness[LogbookCategory.WEIGHTED_FITNESS],
+                        "color": hof_fitness[LogbookCategory.WEIGHTED_FITNESS],
                         "colorscale": colorscale,
                         "showscale": True,
-                        "colorbar": {
-                            "title": "Cost function score",
-                            "tickvals": [
-                                -hof_fitness[LogbookCategory.WEIGHTED_FITNESS].min(),
-                                -hof_fitness[LogbookCategory.WEIGHTED_FITNESS].max(),
-                            ],
-                            "tickmode": "array",
-                            "ticktext": [
-                                hof_fitness[LogbookCategory.WEIGHTED_FITNESS].min(),
-                                hof_fitness[LogbookCategory.WEIGHTED_FITNESS].max(),
-                            ],
-                        },
-                        "reversescale": True,
+                        "colorbar": {"title": "Cost function score"},
+                        "reversescale": reversescale,
                     },
                     dimensions=dimensions,
                     unselected={
@@ -376,7 +365,7 @@ class SimpleViewer(AbstractViewer):
                 fg_index
                 for fg_index, fg in enumerate(self.functional_group_set.functional_groups)
                 if (fg.night_layer == layer and day_cycle == DayCycle.DAY)
-                or (fg.day_layer == layer and day_cycle == DayCycle.Night)
+                or (fg.day_layer == layer and day_cycle == DayCycle.NIGHT)
             ]
 
         def _plot_best_prediction(

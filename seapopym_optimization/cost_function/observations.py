@@ -5,14 +5,11 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING
 
 import pandas as pd
+import xarray as xr
 from pandas.tseries.frequencies import to_offset
 from seapopym.standard.units import StandardUnitsLabels
-
-if TYPE_CHECKING:
-    import xarray as xr
 
 
 class DayCycle(StrEnum):
@@ -41,6 +38,10 @@ class TimeSeriesObservation(AbstractObservation):
 
     def __post_init__(self: TimeSeriesObservation) -> None:
         """Check that the observation data is complient with the format of the predicted biomass."""
+        if not isinstance(self.observation, xr.DataArray):
+            msg = "Observation must be an xarray DataArray."
+            raise TypeError(msg)
+
         for coord in ["T", "X", "Y", "Z"]:
             if coord not in self.observation.cf.coords:
                 msg = f"Coordinate {coord} must be in the observation Dataset."

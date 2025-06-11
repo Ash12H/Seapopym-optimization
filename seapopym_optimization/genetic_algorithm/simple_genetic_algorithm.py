@@ -133,10 +133,13 @@ class SimpleGeneticAlgorithm:
 
     def __post_init__(self: SimpleGeneticAlgorithm) -> None:
         """Check parameters."""
+        if self.logbook is not None and not isinstance(self.logbook, Logbook):
+            self.logbook = Logbook(self.logbook)
+
         if self.save is not None:
             self.save = Path(self.save)
             if self.save.exists():
-                waring_msg = f"Logbook file {self.save} already exists. Please choose a different path."
+                waring_msg = f"Logbook file {self.save} already exists. It will be overwritten."
                 logger.warning(waring_msg)
 
         ordered_parameters = self.cost_function.functional_groups.unique_functional_groups_parameters_ordered()
