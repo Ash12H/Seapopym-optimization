@@ -2,20 +2,72 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
+import pandas as pd
 import xarray as xr
+from pandas.tseries.frequencies import to_offset
 from seapopym.standard.labels import ConfigurationLabels, CoordinatesLabels, ForcingLabels
+from seapopym.standard.units import StandardUnitsLabels
 
 from seapopym_optimization.cost_function.base_cost_function import AbstractCostFunction
-from seapopym_optimization.cost_function.observations import DayCycle
+from seapopym_optimization.cost_function.base_observation import AbstractObservation, DayCycle
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from seapopym_optimization.cost_function.observations import TimeSeriesObservation
+logger = logging.getLogger(__name__)
+
+
+@dataclass(kw_only=True)
+class TimeSeriesObservation(AbstractObservation):
+    """The structure used to store the observations as a time series."""
+
+    name: str
+    observation: xr.DataArray
+    observation_type: DayCycle = DayCycle.DAY
+    observation_interval: pd.offsets.BaseOffset | None = None
+
+    def __post_init__(self: TimeSeriesObservation) -> None:
+        """Check that the observation data is complient with the format of the predicted biomass."""
+        if not isinstance(self.observation, xr.DataArray):
+            msg = "Observation must be an xarray DataArray."
+            raise TypeError(msg)
+
+        for coord in ["T", "X", "Y", "Z"]:
+            if coord not in self.observation.cf.coords:
+                msg = f"Coordinate {coord} must be in the observation Dataset."
+                raise ValueError(msg)
+
+        for coord in [CoordinatesLabels.X, CoordinatesLabels.Y, CoordinatesLabels.Z]:
+            if self.observation.cf.coords[coord].data.size != 1:
+                msg = (
+                    f"Multiple {coord} coordinates found in the observation Dataset. "
+                    "The observation must be a time series with a single X, Y and Z (i.e. Seapodym layer) coordinate."
+                )
+                raise NotImplementedError(msg)
+
+        try:
+            self.observation = self.observation.pint.quantify().pint.to(StandardUnitsLabels.biomass).pint.dequantify()
+        except Exception as e:
+            msg = (
+                f"At least one variable is not convertible to {StandardUnitsLabels.biomass}, which is the unit of the "
+                "predicted biomass."
+            )
+            raise ValueError(msg) from e
+
+        if not isinstance(self.observation_interval, (pd.offsets.BaseOffset, type(None))):
+            self.observation_interval = to_offset(self.observation_interval)
+
+        if self.observation_interval is not None:
+            self.observation = self.resample_data_by_observation_interval(self.observation)
+
+    def resample_data_by_observation_interval(self: TimeSeriesObservation, data: xr.DataArray) -> xr.DataArray:
+        """Resample the data according to the observation type."""
+        return data.cf.resample(T=self.observation_interval).mean().cf.dropna("T", how="all")
 
 
 def aggregate_biomass_by_layer(
@@ -31,6 +83,7 @@ def aggregate_biomass_by_layer(
         dims=[CoordinatesLabels.functional_group],
         coords={CoordinatesLabels.functional_group: data[CoordinatesLabels.functional_group].data},
         name=layer_coordinates_name,
+        attrs={"axis": "Z"},
     )
     return (
         data.assign_coords({layer_coordinates_name: layer_coord})
@@ -68,7 +121,7 @@ def root_mean_square_error(
     return cost
 
 
-@dataclass
+@dataclass(kw_only=True)
 class SimpleRootMeanSquareErrorCostFunction(AbstractCostFunction):
     """
     Generator of the cost function for the 'SeapoPym No Transport' model.
@@ -114,7 +167,9 @@ class SimpleRootMeanSquareErrorCostFunction(AbstractCostFunction):
 
         return tuple(
             root_mean_square_error(
-                pred=biomass_day if obs.observation_type == DayCycle.DAY else biomass_night,
+                pred=obs.resample_data_by_observation_interval(
+                    biomass_day if obs.observation_type == DayCycle.DAY else biomass_night
+                ),
                 obs=obs.observation,
                 root=self.root_mse,
                 centered=self.centered_mse,

@@ -15,7 +15,7 @@ from scipy.stats import entropy
 from seapopym.standard.labels import ForcingLabels
 from sklearn.preprocessing import QuantileTransformer
 
-from seapopym_optimization.cost_function.observations import DayCycle, TimeSeriesObservation
+from seapopym_optimization.cost_function.simple_rmse_cost_function import DayCycle, TimeSeriesObservation
 from seapopym_optimization.genetic_algorithm.simple_logbook import Logbook, LogbookCategory, LogbookIndex
 from seapopym_optimization.viewer.base_viewer import AbstractViewer
 

@@ -15,11 +15,11 @@ if TYPE_CHECKING:
 
     import numpy as np
 
-    from seapopym_optimization.cost_function.observations import AbstractObservation
+    from seapopym_optimization.cost_function.base_observation import AbstractObservation
     from seapopym_optimization.model_generator.base_model_generator import AbstractModelGenerator
 
 
-@dataclass
+@dataclass(kw_only=True)
 class AbstractCostFunction(ABC):
     """
     Abstract class for the cost function used in the optimization process.
