@@ -117,10 +117,10 @@ def decompose_season_trend_loess(
 
     """
     result = seasonal.STL(
-        pd.DataFrame({"time": time, "data": data}).resample("1D").mean().interpolate("linear"),
+        pd.DataFrame({"data": data}, index=time).resample("1D").mean().interpolate("linear"),
         period=period,
         **kwargs,
-    )
+    ).fit()
     return pd.DataFrame({"trend": result.trend, "seasonal": result.seasonal, "resid": result.resid})
 
 
@@ -342,6 +342,7 @@ class STLSeasonalityCostFunction(SeasonalityCostFunction):
 
     def __post_init__(self) -> None:
         """Check that the observations are of the correct type."""
+        super().__post_init__()
         if not all(isinstance(obs, STLSeasonalObservation) for obs in self.observations):
             msg = "All observations must be instances of STLSeasonalObservation."
             raise TypeError(msg)
