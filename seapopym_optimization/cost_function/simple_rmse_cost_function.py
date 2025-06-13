@@ -24,7 +24,11 @@ logger = logging.getLogger(__name__)
 
 @dataclass(kw_only=True)
 class TimeSeriesObservation(AbstractObservation):
-    """The structure used to store the observations as a time series."""
+    """
+    The structure used to store the observations as a time series.
+
+    Meaning that the observation is a time series of biomass values at a given location and layer.
+    """
 
     name: str
     observation: xr.DataArray
@@ -137,7 +141,7 @@ class SimpleRootMeanSquareErrorCostFunction(AbstractCostFunction):
 
     """
 
-    observations: Sequence[TimeSeriesObservation]
+    observations: Sequence[TimeSeriesObservation]  # TODO(Jules): Should accept spatial observations
     root_mse: bool = True
     centered_mse: bool = False
     normalized_mse: bool = False
