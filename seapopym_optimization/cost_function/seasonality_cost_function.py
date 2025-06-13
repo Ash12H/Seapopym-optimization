@@ -45,6 +45,7 @@ def decompose_gam(
     *,
     fit_intercept: bool = False,
     seasonal_cycle_length: Number = 365.25,
+    log10_data: bool = True,
     **kwargs: dict,
 ) -> pd.DataFrame:
     """
@@ -81,12 +82,15 @@ def decompose_gam(
         .reset_index()
     )
 
+    # JULES
     data["day_since_start"] = np.cumsum(np.ones_like(data["time"], dtype=int))
     data["sin_doy"] = np.sin(2 * np.pi * data["day_since_start"] / seasonal_cycle_length)
     data["cos_doy"] = np.cos(2 * np.pi * data["day_since_start"] / seasonal_cycle_length)
-
     x = data[["day_since_start", "sin_doy", "cos_doy"]].to_numpy()
     y = data["data"].to_numpy()
+    if log10_data:
+        y = np.log10(np.maximum(y, np.finfo(float).eps))
+
     gam = LinearGAM(s(0, n_splines=n_splines) + l(1) + l(2), fit_intercept=fit_intercept, **kwargs).fit(x, y)
     trend = gam.partial_dependence(term=0, X=x)
     season = gam.partial_dependence(term=1, X=x) + gam.partial_dependence(term=2, X=x)
