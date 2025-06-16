@@ -1,11 +1,4 @@
-notebooks/1_data_processing/1_1_Forcing/data/0_raw/*
-notebooks/1_data_processing/1_1_Forcing/data/1_products/*
-notebooks/1_data_processing/1_1_Forcing/data/2_temporary/*
-
-
-
-# Raw data files must be downloaded from the following link: https://github.com/Ash12H/seapopym-data/tree/main/data/zooplankton_product
-
+.vscode
 
 
 # DEFAULT --------------------------------------------------------------------------------------------
