@@ -33,7 +33,7 @@ class TimeSeriesObservation(AbstractObservation):
     name: str
     observation: xr.DataArray
     observation_type: DayCycle = DayCycle.DAY
-    observation_interval: pd.offsets.BaseOffset | None = None
+    observation_interval: pd.offsets.BaseOffset = "1D"
 
     def __post_init__(self: TimeSeriesObservation) -> None:
         """Check that the observation data is complient with the format of the predicted biomass."""

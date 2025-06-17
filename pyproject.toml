@@ -11,7 +11,31 @@ authors = [
 keywords = ["oceanography", "marine ecosystems", "marine biology"]
 classifiers = ["Topic :: Scientific/Engineering :: Oceanography"]
 
-dependencies = ["seapopym", "deap", "dask", "distributed", "pytest"]
+dependencies = [
+    "seapopym",
+    "deap",
+    "dask",
+    "distributed",
+    "pytest",
+    "pandera",
+    "plotly",
+    "scipy",
+    "scikit-learn",
+]
+
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+ruff = "*"
+
+[tool.poetry.group.doc]
+optional = true
+
+[tool.poetry.group.doc.dependencies]
+sphinx = "*"
+sphinx-rtd-theme = "*"
+nbsphinx = "*"
 
 [build-system]
 requires = ["poetry-core"]
@@ -19,3 +43,6 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 version = "0.0.2.1"
+
+[tool.poetry.requires-plugins]
+poetry-plugin-export = "^1.9.0"

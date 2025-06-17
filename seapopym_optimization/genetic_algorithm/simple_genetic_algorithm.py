@@ -149,6 +149,13 @@ class SimpleGeneticAlgorithm:
             for constraint in self.constraint:
                 self.toolbox.decorate("evaluate", constraint.generate(list(ordered_parameters.keys())))
 
+        if len(self.meta_parameter.cost_function_weight) != len(self.cost_function.observations):
+            msg = (
+                "The cost function weight must have the same length as the number of observations. "
+                f"Got {len(self.meta_parameter.cost_function_weight)} and {len(self.cost_function.observations)}."
+            )
+            raise ValueError(msg)
+
     def update_logbook(self: SimpleGeneticAlgorithm, logbook: Logbook) -> None:
         """Update the logbook with the new data and save to disk if a path is provided."""
         if not isinstance(logbook, Logbook):
@@ -229,6 +236,8 @@ class SimpleGeneticAlgorithm:
         generation_start, population = self._initialization()
 
         for gen in range(generation_start, self.meta_parameter.NGEN):
+            log_message = f"Generation {gen} / {self.meta_parameter.NGEN}."
+            logger.info(log_message)
             offspring = self.toolbox.select(population, self.meta_parameter.POP_SIZE)
             offspring = self.meta_parameter.variation(
                 offspring, self.toolbox, self.meta_parameter.CXPB, self.meta_parameter.MUTPB

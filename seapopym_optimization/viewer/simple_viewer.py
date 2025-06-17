@@ -131,9 +131,15 @@ class SimpleViewer(AbstractViewer):
             (LogbookCategory.WEIGHTED_FITNESS, LogbookCategory.WEIGHTED_FITNESS), ascending=False
         )
 
-    def fitness_evolution(self: SimpleViewer, *, points: bool = False, log_y: bool = False) -> Figure:
+    def fitness_evolution(
+        self: SimpleViewer, *, points: bool = False, log_y: bool = False, absolute: bool = False
+    ) -> Figure:
         """Print the evolution of the fitness by generation."""
-        data = self.logbook[LogbookCategory.WEIGHTED_FITNESS].reset_index()
+        data = self.logbook[LogbookCategory.WEIGHTED_FITNESS]
+        if absolute:
+            data = data.abs()
+        data = data.reset_index()
+
         data = data[np.isfinite(data[LogbookCategory.WEIGHTED_FITNESS])]
         figure = px.box(
             data_frame=data,
