@@ -5,7 +5,7 @@
 #################################################################################
 
 PROJECT_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
-PROJECT_NAME = Seapopym
+PROJECT_NAME = Seapopym-Optimization
 
 #################################################################################
 # COMMANDS                                                                      #
