@@ -18,20 +18,3 @@ exclude = [".eggs", ".git", ".venv", "__pypackages__", "build", "__init__.py"]
 
 line-length = 120
 indent-width = 4
-
-[lint.extend-per-file-ignores]
-"test/*" = [
-    "S101",
-    "SLF001",
-    "PLR2004",
-    "D102",
-    "D100",
-    "D101",
-    "D103",
-    "ANN001",
-    "ANN101",
-    "ANN201",
-    "PLR0913",
-    "ERA001",
-]
-"*.ipynb" = ["D100"]
