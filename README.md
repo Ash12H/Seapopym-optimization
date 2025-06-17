@@ -1,5 +1,11 @@
 # Seapopym-optimisation
 
-## Data
+Seapopym-optimisation is a Python project dedicated to the optimization of spatial ecological models, with a focus on the SeapoPym models.
+It provides a modular framework for:
 
-Raw data must be download from the following link [seapodym-data](https://github.com/Ash12H/seapopym-data/tree/main/data/zooplankton_product). Then the data must be placed in the `notebooks/1_data_processing/1_1_Forcing/raw/` directory.
+-   Model calibration using genetic algorithms,
+-   Management and validation of parameter sets,
+-   Comparison between simulations and observations (time series, seasonal decomposition, etc.),
+-   Use of various cost functions (RMSE, GAM decomposition, STL, and more).
+
+This package was developed by Jules Lehodey as part of his thesis "Data driven modeling approach of mesozooplankton and micronekton functional groups".
