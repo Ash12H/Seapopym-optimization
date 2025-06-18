@@ -82,7 +82,6 @@ def decompose_gam(
         .reset_index()
     )
 
-    # JULES
     data["day_since_start"] = np.cumsum(np.ones_like(data["time"], dtype=int))
     data["sin_doy"] = np.sin(2 * np.pi * data["day_since_start"] / seasonal_cycle_length)
     data["cos_doy"] = np.cos(2 * np.pi * data["day_since_start"] / seasonal_cycle_length)
